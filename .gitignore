@@ -1,0 +1,7 @@
+backend/.env
+frontend/.env
+
+frontend/.next
+frontend/node_modules
+backend/.pytest_cache
+backend/node_modules
