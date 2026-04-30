@@ -5,12 +5,15 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     texlive-latex-base \
-    texlive-latex-recommended \
-    texlive-fonts-recommended \
     texlive-latex-extra \
+    texlive-fonts-recommended \
+    texlive-fonts-extra \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir .
+
+RUN pip install --no-cache-dir --upgrade pip
 
 COPY . .
+
+RUN pip install --no-cache-dir -e .

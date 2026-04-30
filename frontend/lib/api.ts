@@ -1,5 +1,9 @@
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
+// Server-side (SSR) runs inside Docker → must use the service name "backend"
+// Client-side (browser) runs on the host → must use "localhost"
+const isServer = typeof window === "undefined";
+export const API_BASE = isServer
+  ? (process.env.INTERNAL_API_BASE_URL || "http://backend:8000/api/v1")
+  : (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1");
 
 function authHeaders(): HeadersInit {
   const token = process.env.NEXT_PUBLIC_ACCESS_TOKEN || "";

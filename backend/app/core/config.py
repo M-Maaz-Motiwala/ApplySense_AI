@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_embedding_model: str = "text-embedding-3-small"
 
+    gemini_api_key: str | None = Field(None, alias="GEMINI_API_KEY")
+    groq_api_key: str | None = Field(None, alias="GROQ_API_KEY")
+    groq_model: str = Field("llama3-8b-8192", alias="GROQ_MODEL")
+
     latex_output_dir: str = "./generated/resumes"
     latex_template_path: str = "app/templates/resume_template.tex.j2"
 

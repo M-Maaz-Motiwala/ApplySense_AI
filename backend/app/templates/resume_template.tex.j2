@@ -1,28 +1,196 @@
-\documentclass[11pt]{article}
-\usepackage[margin=0.75in]{geometry}
+%-------------------------
+% Resume in Latex — ApplySense AI Generated
+% Based on Jake Gutierrez template (MIT License)
+%------------------------
+
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
 \usepackage{enumitem}
-\setlist[itemize]{leftmargin=*, itemsep=3pt}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{fontawesome5}
+\usepackage{multicol}
+\setlength{\multicolsep}{-3.0pt}
+\setlength{\columnsep}{-1pt}
+\input{glyphtounicode}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+\addtolength{\oddsidemargin}{-0.6in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1.19in}
+\addtolength{\topmargin}{-.7in}
+\addtolength{\textheight}{1.4in}
+
+\urlstyle{same}
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+\titleformat{\section}{
+  \vspace{-4pt}\scshape\raggedright\large\bfseries
+}{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
+
+\pdfgentounicode=1
+
+%--- Custom commands ---
+\newcommand{\resumeItem}[1]{
+  \item\small{
+    {#1 \vspace{-2pt}}
+  }
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-2pt}\item
+    \begin{tabular*}{1.0\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & \textbf{\small #2} \\
+      \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{1.001\textwidth}{l@{\extracolsep{\fill}}r}
+      \small#1 & \textbf{\small #2}\\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeSubItem}[1]{\resumeItem{#1}\vspace{-4pt}}
+
+\renewcommand\labelitemi{$\vcenter{\hbox{\tiny$\bullet$}}$}
+\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-5pt}}
+
+%-------------------------------------------
 \begin{document}
 
-{\LARGE \textbf{{{{ name }}}}}\\
-{{ email }} {% if phone %}| {{ phone }}{% endif %} {% if location %}| {{ location }}{% endif %}
+%----------HEADING----------
+\begin{center}
+    {\Huge \scshape {{ name }} } \\ \vspace{1pt}
+    {% if location %}{{ location }} \\ \vspace{1pt}{% endif %}
+    \small
+    {% if phone %}\raisebox{-0.1\height}\faPhone\ {{ phone }} ~ {% endif %}
+    {% if email %}\href{mailto:{{ email }} }{\raisebox{-0.2\height}\faEnvelope\ \underline{ {{ email }} }} ~ {% endif %}
+    {% if linkedin %}\href{ {{ linkedin }} }{\raisebox{-0.2\height}\faLinkedin\ \underline{ {{ linkedin_display }} }} ~ {% endif %}
+    {% if github %}\href{ {{ github }} }{\raisebox{-0.2\height}\faGithub\ \underline{ {{ github_display }} }}{% endif %}
+    \vspace{-8pt}
+\end{center}
 
-\vspace{8pt}
-\textbf{Summary}\\
-{{ summary }}
+{% if summary %}
+%-----------SUMMARY-----------
+\section{Summary}
+\small {{ summary }}
+\vspace{-5pt}
+{% endif %}
 
-\vspace{8pt}
-\textbf{Skills}\\
-{% for skill in skills %}
-{{ skill }}{% if not loop.last %}, {% endif %}
-{% endfor %}
+{% if education %}
+%-----------EDUCATION-----------
+\section{Education}
+  \resumeSubHeadingListStart
+  {% for edu in education %}
+    \resumeSubheading
+      { {{ edu.school }} }{ {{ edu.dates }} }
+      { {{ edu.degree }} }{ {{ edu.location }} }
+  {% endfor %}
+  \resumeSubHeadingListEnd
+{% endif %}
 
-\vspace{8pt}
-\textbf{Experience Highlights}
-\begin{itemize}
-{% for bullet in experience_bullets %}
-\item {{ bullet }}
-{% endfor %}
-\end{itemize}
+{% if coursework %}
+%------RELEVANT COURSEWORK-------
+\section{Relevant Coursework}
+    \begin{multicols}{4}
+        \begin{itemize}[itemsep=-5pt, parsep=3pt]
+        {% for course in coursework %}
+            \item\small {{ course }}
+        {% endfor %}
+        \end{itemize}
+    \end{multicols}
+    \vspace*{2.0\multicolsep}
+{% endif %}
+
+{% if experience %}
+%-----------EXPERIENCE-----------
+\section{Experience}
+  \resumeSubHeadingListStart
+  {% for exp in experience %}
+    \resumeSubheading
+      { {{ exp.company }} }{ {{ exp.dates }} }
+      { {{ exp.title }} }{ {{ exp.location }} }
+      \resumeItemListStart
+      {% for bullet in exp.bullets %}
+        \resumeItem{ {{ bullet }} }
+      {% endfor %}
+      \resumeItemListEnd
+  {% endfor %}
+  \resumeSubHeadingListEnd
+\vspace{-16pt}
+{% endif %}
+
+{% if projects %}
+%-----------PROJECTS-----------
+\section{Projects}
+    \vspace{-5pt}
+    \resumeSubHeadingListStart
+    {% for proj in projects %}
+      \resumeProjectHeading
+          {\textbf{ {{ proj.name }} } $|$ \emph{ {{ proj.tech }} }}{ {{ proj.date }} }
+          \resumeItemListStart
+          {% for bullet in proj.bullets %}
+            \resumeItem{ {{ bullet }} }
+          {% endfor %}
+          \resumeItemListEnd
+          \vspace{-13pt}
+    {% endfor %}
+    \resumeSubHeadingListEnd
+\vspace{-2pt}
+{% endif %}
+
+%-----------TECHNICAL SKILLS-----------
+\section{Technical Skills}
+ \begin{itemize}[leftmargin=0.15in, label={}]
+    \small{\item{
+    {% if skills_languages %}
+     \textbf{Languages}{: {{ skills_languages }} } \\
+    {% endif %}
+    {% if skills_tools %}
+     \textbf{Developer Tools}{: {{ skills_tools }} } \\
+    {% endif %}
+    {% if skills_frameworks %}
+     \textbf{Technologies/Frameworks}{: {{ skills_frameworks }} } \\
+    {% endif %}
+    }}
+ \end{itemize}
+ \vspace{-16pt}
+
+{% if leadership %}
+%-----------LEADERSHIP---------------
+\section{Leadership / Extracurricular}
+    \resumeSubHeadingListStart
+    {% for lead in leadership %}
+        \resumeSubheading{ {{ lead.org }} }{ {{ lead.dates }} }{ {{ lead.title }} }{ {{ lead.location }} }
+            \resumeItemListStart
+            {% for bullet in lead.bullets %}
+                \resumeItem{ {{ bullet }} }
+            {% endfor %}
+            \resumeItemListEnd
+    {% endfor %}
+    \resumeSubHeadingListEnd
+{% endif %}
 
 \end{document}

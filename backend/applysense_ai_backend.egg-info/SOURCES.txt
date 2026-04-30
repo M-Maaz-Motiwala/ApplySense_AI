@@ -8,6 +8,8 @@ app/api/v1/__init__.py
 app/api/v1/applications.py
 app/api/v1/auth.py
 app/api/v1/jobs.py
+app/api/v1/llm.py
+app/api/v1/llm_test.py
 app/api/v1/resumes.py
 app/api/v1/router.py
 app/api/v1/tasks.py
@@ -30,6 +32,8 @@ app/services/langgraph/cover_email_graph.py
 app/services/langgraph/resume_graph.py
 app/services/latex/__init__.py
 app/services/latex/renderer.py
+app/services/llm/__init__.py
+app/services/llm/service.py
 app/services/matching/__init__.py
 app/services/matching/engine.py
 app/tasks/__init__.py

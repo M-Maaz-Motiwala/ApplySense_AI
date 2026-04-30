@@ -1,76 +1,89 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16
-    environment:
-      POSTGRES_DB: applysense
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+    env_file:
+      - ./backend/.env
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:7
-    ports:
-      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    image: appliesense-backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     env_file:
-      - ./backend/.env.example
+      - ./backend/.env
     volumes:
       - ./backend:/app
     ports:
       - "8000:8000"
+    restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: appliesense-backend
     command: celery -A app.workers.celery_app worker -l info
     env_file:
-      - ./backend/.env.example
+      - ./backend/.env
     volumes:
       - ./backend:/app
+    restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   beat:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: appliesense-backend
     command: celery -A app.workers.celery_app beat -l info
     env_file:
-      - ./backend/.env.example
+      - ./backend/.env
     volumes:
       - ./backend:/app
+    restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
     env_file:
-      - ./frontend/.env.example
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - ./frontend/.env
     ports:
       - "3000:3000"
+    volumes:
+      - ./frontend:/app
+    restart: unless-stopped
     depends_on:
       - backend
 
 volumes:
   pgdata:
+  redisdata:

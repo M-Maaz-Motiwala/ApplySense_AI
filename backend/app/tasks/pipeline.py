@@ -121,6 +121,8 @@ def generate_application(job_id: str, user_id: str, match_score: float) -> dict:
                     "email": user.email,
                     "phone": user.phone or "",
                     "location": user.location or "",
+                    "linkedin": user.experience_blocks.get("linkedin", ""),
+                    "github": user.experience_blocks.get("github", ""),
                     "experience_blocks": user.experience_blocks,
                     "skills_matrix": user.skills_matrix,
                 },

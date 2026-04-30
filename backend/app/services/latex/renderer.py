@@ -62,7 +62,7 @@ class LatexRenderer:
         ]
         result = subprocess.run(compile_cmd, capture_output=True, text=True, check=False)
         if result.returncode != 0 or not pdf_file.exists():
-            raise RuntimeError(f"LaTeX compilation failed: {result.stderr}")
+            raise RuntimeError(f"LaTeX compilation failed.\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}")
 
         return {
             "latex_source": latex_source,
