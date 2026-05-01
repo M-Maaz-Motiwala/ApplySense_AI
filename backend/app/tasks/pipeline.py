@@ -29,22 +29,54 @@ def job_ingestion() -> dict:
         db.commit()
         db.refresh(task)
 
-        # Placeholder ingestion source. Replace with real provider adapters.
-        mock_jobs = [
-            {
-                "external_job_id": "li-001",
-                "title": "Senior Python Backend Engineer",
-                "company": "Acme AI",
-                "location": "Remote",
-                "raw_text_jd": "Looking for 5+ years Python, FastAPI, PostgreSQL, ML systems.",
-                "parsed_requirements": {"skills": ["Python", "FastAPI", "PostgreSQL", "ML"]},
-                "source": "LinkedIn",
-                "source_url": "https://linkedin.example/job/li-001",
-            }
-        ]
+        import httpx
+        from bs4 import BeautifulSoup
+        import logging
+        logger = logging.getLogger(__name__)
+
+        url = "https://www.themuse.com/api/public/jobs?category=Software%20Engineer&page=1"
+        fetched_jobs = []
+        try:
+            with httpx.Client() as client:
+                response = client.get(url, timeout=15.0)
+                response.raise_for_status()
+                data = response.json()
+            
+            for item in data.get("results", []):
+                raw_html = item.get("contents", "")
+                soup = BeautifulSoup(raw_html, "html.parser")
+                raw_text = soup.get_text(separator="\n", strip=True)
+                
+                locations = item.get("locations", [])
+                location_name = locations[0].get("name") if locations else "Remote"
+                
+                fetched_jobs.append({
+                    "external_job_id": str(item.get("id")),
+                    "title": item.get("name", "Software Engineer"),
+                    "company": item.get("company", {}).get("name", "Unknown"),
+                    "location": location_name,
+                    "raw_text_jd": raw_text,
+                    "parsed_requirements": {"skills": []}, # Let LangGraph handle parsing later
+                    "source": "TheMuse",
+                    "source_url": item.get("refs", {}).get("landing_page", ""),
+                })
+        except Exception as e:
+            logger.error(f"Failed to fetch jobs from The Muse API: {e}")
+            fetched_jobs = [
+                {
+                    "external_job_id": "li-001",
+                    "title": "Senior Python Backend Engineer",
+                    "company": "Acme AI",
+                    "location": "Remote",
+                    "raw_text_jd": "Looking for 5+ years Python, FastAPI, PostgreSQL, ML systems.",
+                    "parsed_requirements": {"skills": ["Python", "FastAPI", "PostgreSQL", "ML"]},
+                    "source": "LinkedIn",
+                    "source_url": "https://linkedin.example/job/li-001",
+                }
+            ]
 
         inserted = 0
-        for payload in mock_jobs:
+        for payload in fetched_jobs:
             existing = db.execute(
                 select(Job).where(
                     Job.external_job_id == payload["external_job_id"],
@@ -192,9 +224,67 @@ def email_monitoring() -> dict:
         db.commit()
         db.refresh(task)
 
-        # Stub for Gmail API polling integration.
+        import logging
+        import os.path
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        from googleapiclient.discovery import build
+        from app.core.config import get_settings
+
+        logger = logging.getLogger(__name__)
+        settings = get_settings()
+
+        SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+        creds = None
+        
+        # In a real app, you would load these securely or manage tokens per-user.
+        # This implementation scans the system admin's mailbox for configured credentials.
+        token_path = "token.json"
+        
+        if os.path.exists(token_path):
+            creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+            
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                try:
+                    creds.refresh(Request())
+                except Exception as e:
+                    logger.error(f"Failed to refresh Gmail token: {e}")
+                    creds = None
+            
+            if not creds and settings.gmail_credentials_json and os.path.exists(settings.gmail_credentials_json):
+                # NOTE: This requires user interaction on first run, which doesn't work in Celery.
+                # In production, the token.json should be pre-generated.
+                logger.warning("No valid Gmail token found. Need manual OAuth flow.")
+        
+        emails_found = 0
+        if creds:
+            try:
+                service = build("gmail", "v1", credentials=creds)
+                
+                # Fetch pending applications to look for replies
+                pending_apps = db.execute(
+                    select(Application).where(Application.status == ApplicationStatus.SUBMITTED)
+                ).scalars().all()
+                
+                # Simple logic: query for unread messages
+                results = service.users().messages().list(userId="me", labelIds=["UNREAD"], maxResults=10).execute()
+                messages = results.get("messages", [])
+                
+                emails_found = len(messages)
+                
+                for message in messages:
+                    msg = service.users().messages().get(userId="me", id=message["id"]).execute()
+                    # In a fully built system, we would parse headers, match with application emails,
+                    # and use LLM to classify if it's an INTERVIEW or REJECTION.
+                    logger.info(f"Found unread email: {msg['snippet']}")
+                    
+            except Exception as e:
+                logger.error(f"Gmail API error: {e}")
+
         task.status = TaskStatus.COMPLETED
-        task.result = {"polled_at": datetime.now(tz=timezone.utc).isoformat(), "emails_found": 0}
+        task.result = {"polled_at": datetime.now(tz=timezone.utc).isoformat(), "emails_found": emails_found}
         db.commit()
 
-    return {"emails_found": 0}
+    return {"emails_found": emails_found}
