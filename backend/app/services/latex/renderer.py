@@ -39,15 +39,20 @@ class LatexRenderer:
                 escaped[key] = value
         return escaped
 
-    def render_and_compile(self, optimized_json: dict) -> dict:
-        output_dir = Path(self.settings.latex_output_dir)
+    def render_and_compile(self, optimized_json: dict, user_id: str = None, job_id: str = None) -> dict:
+        base_dir = Path(self.settings.latex_output_dir)
+        if user_id and job_id:
+            output_dir = base_dir / str(user_id) / str(job_id)
+        else:
+            output_dir = base_dir
+        
         output_dir.mkdir(parents=True, exist_ok=True)
 
         escaped_payload = self._escape_payload(optimized_json)
         template = self.env.get_template(self.template_name)
         latex_source = template.render(**escaped_payload)
 
-        stem = f"resume_{uuid4()}"
+        stem = "resume"
         tex_file = output_dir / f"{stem}.tex"
         pdf_file = output_dir / f"{stem}.pdf"
 
@@ -67,6 +72,7 @@ class LatexRenderer:
         return {
             "latex_source": latex_source,
             "pdf_path": str(pdf_file),
+            "output_dir": str(output_dir),
             "metadata": {"tex_path": str(tex_file), "compiler": "pdflatex"},
         }
 

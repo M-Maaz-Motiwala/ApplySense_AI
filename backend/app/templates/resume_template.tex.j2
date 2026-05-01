@@ -1,6 +1,8 @@
 %-------------------------
-% Resume in Latex — ApplySense AI Generated
-% Based on Jake Gutierrez template (MIT License)
+% Resume in Latex
+% Author : Jake Gutierrez
+% Based off of: https://github.com/sb2nov/resume
+% License : MIT
 %------------------------
 
 \documentclass[letterpaper,11pt]{article}
@@ -22,12 +24,26 @@
 \setlength{\columnsep}{-1pt}
 \input{glyphtounicode}
 
+
+%----------FONT OPTIONS----------
+% sans-serif
+% \usepackage[sfdefault]{FiraSans}
+% \usepackage[sfdefault]{roboto}
+% \usepackage[sfdefault]{noto-sans}
+% \usepackage[default]{sourcesanspro}
+
+% serif
+% \usepackage{CormorantGaramond}
+% \usepackage{charter}
+
+
 \pagestyle{fancy}
-\fancyhf{}
+\fancyhf{} % clear all header and footer fields
 \fancyfoot{}
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}
 
+% Adjust margins
 \addtolength{\oddsidemargin}{-0.6in}
 \addtolength{\evensidemargin}{-0.5in}
 \addtolength{\textwidth}{1.19in}
@@ -35,20 +51,31 @@
 \addtolength{\textheight}{1.4in}
 
 \urlstyle{same}
+
 \raggedbottom
 \raggedright
 \setlength{\tabcolsep}{0in}
 
+% Sections formatting
 \titleformat{\section}{
   \vspace{-4pt}\scshape\raggedright\large\bfseries
 }{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
 
+% Ensure that generate pdf is machine readable/ATS parsable
 \pdfgentounicode=1
 
-%--- Custom commands ---
+%-------------------------
+% Custom commands
+{% raw %}
 \newcommand{\resumeItem}[1]{
   \item\small{
     {#1 \vspace{-2pt}}
+  }
+}
+
+\newcommand{\classesList}[4]{
+    \item\small{
+        {#1 #2 #3 #4 \vspace{-2pt}}
   }
 }
 
@@ -57,6 +84,13 @@
     \begin{tabular*}{1.0\textwidth}[t]{l@{\extracolsep{\fill}}r}
       \textbf{#1} & \textbf{\small #2} \\
       \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeSubSubheading}[2]{
+    \item
+    \begin{tabular*}{0.97\textwidth}{l@{\extracolsep{\fill}}r}
+      \textit{\small#1} & \textit{\small #2} \\
     \end{tabular*}\vspace{-7pt}
 }
 
@@ -76,19 +110,28 @@
 \newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
 \newcommand{\resumeItemListStart}{\begin{itemize}}
 \newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-5pt}}
+{% endraw %}
 
 %-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 \begin{document}
 
 %----------HEADING----------
+% \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}
+%   \textbf{\href{http://sourabhbajaj.com/}{\Large Sourabh Bajaj}} & Email : \href{mailto:sourabh@sourabhbajaj.com}{sourabh@sourabhbajaj.com}\\
+%   \href{http://sourabhbajaj.com/}{http://www.sourabhbajaj.com} & Mobile : +1-123-456-7890 \\
+% \end{tabular*}
+
 \begin{center}
     {\Huge \scshape {{ name }} } \\ \vspace{1pt}
     {% if location %}{{ location }} \\ \vspace{1pt}{% endif %}
     \small
     {% if phone %}\raisebox{-0.1\height}\faPhone\ {{ phone }} ~ {% endif %}
-    {% if email %}\href{mailto:{{ email }} }{\raisebox{-0.2\height}\faEnvelope\ \underline{ {{ email }} }} ~ {% endif %}
-    {% if linkedin %}\href{ {{ linkedin }} }{\raisebox{-0.2\height}\faLinkedin\ \underline{ {{ linkedin_display }} }} ~ {% endif %}
-    {% if github %}\href{ {{ github }} }{\raisebox{-0.2\height}\faGithub\ \underline{ {{ github_display }} }}{% endif %}
+    {% if email %}\href{mailto:{{ email }} }{\raisebox{-0.2\height}\faEnvelope\  \underline{ {{ email }} }} ~ {% endif %}
+    {% if linkedin %}\href{ {{ linkedin }} }{\raisebox{-0.2\height}\faLinkedin\ \underline{ {{ linkedin_display | default('LinkedIn') }} }}  ~ {% endif %}
+    {% if github %}\href{ {{ github }} }{\raisebox{-0.2\height}\faGithub\ \underline{ {{ github_display | default('GitHub') }} }}{% endif %}
     \vspace{-8pt}
 \end{center}
 
@@ -114,17 +157,19 @@
 {% if coursework %}
 %------RELEVANT COURSEWORK-------
 \section{Relevant Coursework}
-    \begin{multicols}{4}
-        \begin{itemize}[itemsep=-5pt, parsep=3pt]
-        {% for course in coursework %}
-            \item\small {{ course }}
-        {% endfor %}
-        \end{itemize}
-    \end{multicols}
-    \vspace*{2.0\multicolsep}
+    %\resumeSubHeadingListStart
+        \begin{multicols}{4}
+            \begin{itemize}[itemsep=-5pt, parsep=3pt]
+            {% for course in coursework %}
+                \item\small {{ course }}
+            {% endfor %}
+            \end{itemize}
+        \end{multicols}
+        \vspace*{2.0\multicolsep}
+    %\resumeSubHeadingListEnd
 {% endif %}
 
-{% if experience %}
+{% if experience and experience|length > 0 %}
 %-----------EXPERIENCE-----------
 \section{Experience}
   \resumeSubHeadingListStart
@@ -132,17 +177,19 @@
     \resumeSubheading
       { {{ exp.company }} }{ {{ exp.dates }} }
       { {{ exp.title }} }{ {{ exp.location }} }
+      {% if exp.bullets and exp.bullets|length > 0 %}
       \resumeItemListStart
       {% for bullet in exp.bullets %}
         \resumeItem{ {{ bullet }} }
       {% endfor %}
       \resumeItemListEnd
+      {% endif %}
   {% endfor %}
   \resumeSubHeadingListEnd
-\vspace{-16pt}
+\vspace{0pt}
 {% endif %}
 
-{% if projects %}
+{% if projects and projects|length > 0 %}
 %-----------PROJECTS-----------
 \section{Projects}
     \vspace{-5pt}
@@ -150,45 +197,53 @@
     {% for proj in projects %}
       \resumeProjectHeading
           {\textbf{ {{ proj.name }} } $|$ \emph{ {{ proj.tech }} }}{ {{ proj.date }} }
+          {% if proj.bullets and proj.bullets|length > 0 %}
           \resumeItemListStart
           {% for bullet in proj.bullets %}
             \resumeItem{ {{ bullet }} }
           {% endfor %}
           \resumeItemListEnd
-          \vspace{-13pt}
+          {% endif %}
+          \vspace{0pt}
     {% endfor %}
     \resumeSubHeadingListEnd
-\vspace{-2pt}
+\vspace{0pt}
 {% endif %}
 
-%-----------TECHNICAL SKILLS-----------
+
+{% if skills_languages or skills_tools or skills_frameworks %}
+%
+%-----------PROGRAMMING SKILLS-----------
 \section{Technical Skills}
  \begin{itemize}[leftmargin=0.15in, label={}]
     \small{\item{
-    {% if skills_languages %}
+     {% if skills_languages %}
      \textbf{Languages}{: {{ skills_languages }} } \\
-    {% endif %}
-    {% if skills_tools %}
+     {% endif %}
+     {% if skills_tools %}
      \textbf{Developer Tools}{: {{ skills_tools }} } \\
-    {% endif %}
-    {% if skills_frameworks %}
+     {% endif %}
+     {% if skills_frameworks %}
      \textbf{Technologies/Frameworks}{: {{ skills_frameworks }} } \\
-    {% endif %}
+     {% endif %}
     }}
  \end{itemize}
- \vspace{-16pt}
+ \vspace{0pt}
+{% endif %}
 
-{% if leadership %}
-%-----------LEADERSHIP---------------
+{% if leadership and leadership|length > 0 %}
+%-----------INVOLVEMENT---------------
 \section{Leadership / Extracurricular}
     \resumeSubHeadingListStart
     {% for lead in leadership %}
         \resumeSubheading{ {{ lead.org }} }{ {{ lead.dates }} }{ {{ lead.title }} }{ {{ lead.location }} }
+            {% if lead.bullets and lead.bullets|length > 0 %}
             \resumeItemListStart
             {% for bullet in lead.bullets %}
                 \resumeItem{ {{ bullet }} }
             {% endfor %}
             \resumeItemListEnd
+            {% endif %}
     {% endfor %}
     \resumeSubHeadingListEnd
 {% endif %}

@@ -114,12 +114,15 @@ def generate_application(job_id: str, user_id: str, match_score: float) -> dict:
             db.commit()
             return {"status": "failed"}
 
+        from app.core.encryption import decrypt_value
+        decrypted_phone = decrypt_value(user.phone) if user.phone else ""
+
         resume_state = resume_graph.invoke(
             {
                 "user_profile": {
                     "name": user.name,
                     "email": user.email,
-                    "phone": user.phone or "",
+                    "phone": decrypted_phone,
                     "location": user.location or "",
                     "linkedin": user.experience_blocks.get("linkedin", ""),
                     "github": user.experience_blocks.get("github", ""),
@@ -129,7 +132,7 @@ def generate_application(job_id: str, user_id: str, match_score: float) -> dict:
                 "job_description": job.raw_text_jd,
             }
         )
-        latex_result = latex_renderer.render_and_compile(resume_state["optimized_json"])
+        latex_result = latex_renderer.render_and_compile(resume_state["optimized_json"], user_id=str(user.id), job_id=str(job.id))
         resume_version = ResumeVersion(
             user_id=user.id,
             job_id=job.id,
@@ -150,6 +153,11 @@ def generate_application(job_id: str, user_id: str, match_score: float) -> dict:
                 "company_info": {"name": job.company, "role": job.title},
             }
         )
+
+        from pathlib import Path
+        output_dir = Path(latex_result["output_dir"])
+        cover_letter_file = output_dir / "coverletter.txt"
+        cover_letter_file.write_text(email_state["cover_letter_text"], encoding="utf-8")
 
         application = Application(
             user_id=user.id,
