@@ -1,16 +1,40 @@
+# ========================
+# Environment files
+# ========================
 .env
 backend/.env
 frontend/.env
+
+# ========================
+# Python cache
+# ========================
 __pycache__/
 *.pyc
-frontend/.next
-frontend/node_modules
+*.pyo
+*.pyd
 
-backend/.pytest_cache
-backend/__pycache__
-backend/node_modules
 backend/__pycache__/
-venv/*
-test_workflow.sh
+backend/.pytest_cache/
+
+# ========================
+# Node / Frontend
+# ========================
+frontend/node_modules/
+frontend/.next/
+
+# ========================
+# Virtual environments
+# ========================
+.venv/
+venv/
+
+# ========================
+# Generated / runtime files
+# ========================
 backend/generated/
 backend/celerybeat-schedule
+
+# ========================
+# Misc / scripts
+# ========================
+test_workflow.sh
