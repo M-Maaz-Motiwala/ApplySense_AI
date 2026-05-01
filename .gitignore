@@ -6,5 +6,6 @@ frontend/.next
 frontend/node_modules
 backend/.pytest_cache
 backend/node_modules
-
+backend/__pycache__
 venv/*
+test_workflow.sh
