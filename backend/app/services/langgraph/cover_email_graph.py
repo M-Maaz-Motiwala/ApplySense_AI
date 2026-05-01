@@ -11,6 +11,12 @@ class CoverEmailState(TypedDict, total=False):
     recruiter_email_draft: str
 
 
+import asyncio
+import logging
+from app.api.v1.llm import LLMService
+
+logger = logging.getLogger(__name__)
+
 def personalization_node(state: CoverEmailState) -> CoverEmailState:
     profile = state.get("user_profile", {})
     company = state.get("company_info", {})
@@ -19,12 +25,37 @@ def personalization_node(state: CoverEmailState) -> CoverEmailState:
     company_name = company.get("name", "your company")
     role_name = company.get("role", "this role")
     user_name = profile.get("name", "Candidate")
+    
+    prompt = f"""You are an expert career coach and professional copywriter.
+Write a highly professional, detailed, and compelling cover letter for the candidate '{user_name}' applying for the role '{role_name}' at '{company_name}'.
 
+Candidate Profile Context:
+{profile}
+
+Job Description Context:
+{job_desc}
+
+Instructions:
+1. Make the cover letter detailed, engaging, and professional (around 300-400 words).
+2. Directly reference specific keywords, requirements, and challenges mentioned in the Job Description.
+3. Highlight the candidate's most relevant skills and past experiences that prove they are a perfect fit.
+4. Output ONLY the raw text of the cover letter. Do not include any surrounding markdown or commentary.
+"""
+    try:
+        llm = LLMService()
+        result = asyncio.run(llm.generate(prompt))
+        if result["status"] == "success":
+            state["cover_letter_text"] = result["text"].strip()
+            logger.info("LLM generated detailed cover letter successfully.")
+            return state
+    except Exception as e:
+        logger.warning(f"Cover letter generation failed: {e}")
+
+    # Fallback to simple template
     state["cover_letter_text"] = (
         f"Dear Hiring Team at {company_name},\n\n"
-        f"I am excited to apply for {role_name}. My background in backend engineering and applied AI aligns strongly "
-        f"with your needs. In prior roles, I delivered measurable outcomes by building robust APIs and intelligent "
-        f"automation pipelines.\n\n"
+        f"I am excited to apply for {role_name}. My background aligns strongly "
+        f"with your needs. In prior roles, I delivered measurable outcomes by building robust solutions.\n\n"
         f"I am particularly drawn to this opportunity because of the challenges highlighted in your description: {job_desc[:300]}...\n\n"
         f"Sincerely,\n{user_name}"
     )

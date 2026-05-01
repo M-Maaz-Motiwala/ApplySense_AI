@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -14,16 +15,25 @@ class ResumeGraphState(TypedDict, total=False):
     user_profile: dict[str, Any]
     job_description: str
     selected_experiences: list[dict[str, Any]]
+    selected_projects: list[dict[str, Any]]
     optimized_json: dict[str, Any]
     latex_code: str
     analysis: dict[str, Any]
     rewritten_bullets: list[str]
+    rewritten_summary: str
+    rewritten_experience: list[dict[str, Any]]
+    rewritten_projects: list[dict[str, Any]]
 
 
 def analyzer_node(state: ResumeGraphState) -> ResumeGraphState:
     jd = state.get("job_description", "")
-    tokens = [t.strip(".,") for t in jd.split() if len(t) > 3]
-    keywords = list(dict.fromkeys([t for t in tokens if t[0].isalpha()]))[:20]
+    tokens = re.findall(r'\b\w+\b', jd)
+    
+    stop_words = {"join", "our", "to", "build", "next", "and", "with", "for", "a", "an", "the", "in", "of", "on", "at", "by", "from", "is", "are", "we", "you", "your", "this", "that", "it", "as", "be", "or", "have", "has", "had", "will", "can", "role", "team", "strong", "experience", "background", "requirements", "skills", "looking"}
+    
+    # Filter out stop words and short words
+    keywords = list(dict.fromkeys([t for t in tokens if t[0].isalpha() and len(t) > 2 and t.lower() not in stop_words]))[:20]
+    
     required_skills = [k for k in keywords if k.lower() in {"python", "fastapi", "sql", "ml", "ai", "docker", "postgresql", "react", "java", "kubernetes", "aws", "flask", "django", "typescript", "javascript", "node", "go", "rust", "c++", "redis", "mongodb", "graphql", "terraform", "ci/cd"}]
     analysis = {
         "keywords": keywords,
@@ -45,8 +55,22 @@ def selector_node(state: ResumeGraphState) -> ResumeGraphState:
         blob = " ".join(str(v) for v in item.values()).lower()
         return sum(1 for k in keywords if k in blob)
 
-    selected_exp = sorted(experiences, key=score_item, reverse=True)
-    selected_proj = sorted(projects, key=score_item, reverse=True)[:3]
+    # Filter items that have at least 1 keyword match, and take top 2 to ensure 1-page fit
+    scored_exp = [(exp, score_item(exp)) for exp in experiences]
+    scored_exp = sorted(scored_exp, key=lambda x: x[1], reverse=True)
+    selected_exp = [x[0] for x in scored_exp if x[1] > 0][:2]
+    
+    # If no experience matches keywords, just take the most recent 1 to avoid empty resume
+    if not selected_exp and experiences:
+        selected_exp = experiences[:1]
+
+    scored_proj = [(proj, score_item(proj)) for proj in projects]
+    scored_proj = sorted(scored_proj, key=lambda x: x[1], reverse=True)
+    selected_proj = [x[0] for x in scored_proj if x[1] > 0][:2]
+
+    # If no projects match, just take the most recent 1
+    if not selected_proj and projects:
+        selected_proj = projects[:1]
 
     state["selected_experiences"] = selected_exp
     state["selected_projects"] = selected_proj
@@ -66,12 +90,12 @@ def rewriter_node(state: ResumeGraphState) -> ResumeGraphState:
     skills = profile.get("skills_matrix", {})
 
     prompt = f"""You are a professional resume writer. Given a job description and a candidate's background,
-rewrite their experience and projects into high-impact, ATS-optimized resume bullets.
+rewrite their experience and project bullet points to perfectly match the job requirements while bypassing ATS systems.
 
 JOB DESCRIPTION:
 {jd}
 
-CANDIDATE EXPERIENCE:
+CANDIDATE EXPERIENCES:
 {exp_text}
 
 CANDIDATE PROJECTS:
@@ -82,7 +106,7 @@ CANDIDATE SKILLS:
 
 Return a JSON object with EXACTLY this structure (no markdown, no code fences, raw JSON only):
 {{
-  "summary": "A 2-3 sentence professional summary tailored to the job description",
+  "summary": "A concise 2-3 sentence professional summary highlighting how the candidate's skills align with the specific job description.",
   "experience": [
     {{
       "company": "Company Name",
@@ -104,10 +128,9 @@ Return a JSON object with EXACTLY this structure (no markdown, no code fences, r
 
 RULES:
 - Each bullet MUST start with a strong action verb (Developed, Engineered, Architected, Implemented, etc.)
-- Include metrics where possible (percentages, counts, time saved)
-- Align keywords with the job description
-- Keep bullets concise (1-2 lines max)
-- If no experience/projects are provided, create reasonable entries based on the candidate's skills
+- Tailor the experiences exactly to the job description keywords.
+- Include metrics and measurable outcomes.
+- CRITICAL 1-PAGE REQUIREMENT: The final resume must fit on a single page. Write exactly 3 to 4 impactful, concise bullets (1-2 lines maximum per bullet) for each experience and project. Do not generate excessively lengthy paragraphs.
 - Return ONLY valid JSON, no other text"""
 
     try:
@@ -124,8 +147,8 @@ RULES:
 
             parsed = json.loads(raw_text)
             state["rewritten_summary"] = parsed.get("summary", "")
-            state["rewritten_experience"] = parsed.get("experience", [])
-            state["rewritten_projects"] = parsed.get("projects", [])
+            state["rewritten_experience"] = parsed.get("experience") or experiences
+            state["rewritten_projects"] = parsed.get("projects") or projects
             logger.info("LLM rewriter produced optimized content successfully.")
             return state
     except (json.JSONDecodeError, Exception) as e:
@@ -170,10 +193,10 @@ def formatter_node(state: ResumeGraphState) -> ResumeGraphState:
         # Projects (LLM-rewritten)
         "projects": state.get("rewritten_projects", []),
 
-        # Skills (structured)
-        "skills_languages": ", ".join(skills.get("languages", skills.get("skills", []))),
-        "skills_tools": ", ".join(skills.get("tools", [])),
-        "skills_frameworks": ", ".join(skills.get("frameworks", [])),
+        # Skills (structured and filtered)
+        "skills_languages": ", ".join(sorted(skills.get("languages", skills.get("skills", [])), key=lambda s: s.lower() not in set(k.lower() for k in state.get("analysis", {}).get("keywords", [])))[:6]),
+        "skills_tools": ", ".join(sorted(skills.get("tools", []), key=lambda s: s.lower() not in set(k.lower() for k in state.get("analysis", {}).get("keywords", [])))[:6]),
+        "skills_frameworks": ", ".join(sorted(skills.get("frameworks", []), key=lambda s: s.lower() not in set(k.lower() for k in state.get("analysis", {}).get("keywords", [])))[:6]),
 
         # Leadership (pass-through)
         "leadership": experience_blocks.get("leadership", []),
@@ -192,17 +215,34 @@ def validator_node(state: ResumeGraphState) -> ResumeGraphState:
             optimized[key] = []
 
     # Ensure experience/project items have bullets as lists
-    for exp in optimized.get("experience", []):
+    # Ensure experience/project items have bullets as lists and required fields
+    for exp in optimized.get("experience", []) or []:
         if not isinstance(exp.get("bullets"), list):
             exp["bullets"] = []
+        exp.setdefault("company", "Company")
+        exp.setdefault("dates", "Start -- End")
+        exp.setdefault("title", "Job Title")
+        exp.setdefault("location", "City, State")
 
-    for proj in optimized.get("projects", []):
+    for proj in optimized.get("projects", []) or []:
         if not isinstance(proj.get("bullets"), list):
             proj["bullets"] = []
+        proj.setdefault("name", "Project")
+        proj.setdefault("tech", "Technology Stack")
+        proj.setdefault("date", "Month Year")
 
-    for lead in optimized.get("leadership", []):
+    for lead in optimized.get("leadership", []) or []:
         if not isinstance(lead.get("bullets"), list):
             lead["bullets"] = []
+        lead.setdefault("org", "Organization")
+        lead.setdefault("dates", "Start -- End")
+        lead.setdefault("title", "Position")
+        lead.setdefault("location", "City, State")
+
+    # Ensure skill strings are safe with fallbacks
+    optimized["skills_languages"] = str(optimized.get("skills_languages", "")).strip() or "Python, JavaScript"
+    optimized["skills_tools"] = str(optimized.get("skills_tools", "")).strip() or "Git, Docker, AWS"
+    optimized["skills_frameworks"] = str(optimized.get("skills_frameworks", "")).strip() or "FastAPI, React"
 
     state["optimized_json"] = optimized
     return state
