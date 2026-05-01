@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = Field(None, alias="GEMINI_API_KEY")
     groq_api_key: str | None = Field(None, alias="GROQ_API_KEY")
     groq_model: str = Field("llama3-8b-8192", alias="GROQ_MODEL")
+    
+    primary_llm_provider: str = Field("gemini", alias="PRIMARY_LLM_PROVIDER")
+    ollama_base_url: str = Field("https://ollama.com", alias="OLLAMA_BASE_URL")
+    ollama_api_key: str | None = Field(None, alias="OLLAMA_API_KEY")
+    ollama_model: str = Field("gpt-oss:20b-cloud", alias="OLLAMA_MODEL")
 
     latex_output_dir: str = "./generated/resumes"
     latex_template_path: str = "app/templates/resume_template.tex.j2"

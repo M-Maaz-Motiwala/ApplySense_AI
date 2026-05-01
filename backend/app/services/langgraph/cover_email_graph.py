@@ -36,10 +36,11 @@ Job Description Context:
 {job_desc}
 
 Instructions:
-1. Make the cover letter detailed, engaging, and professional (around 300-400 words).
+1. Make the cover letter detailed, engaging, and professional (around 200-300 words).
 2. Directly reference specific keywords, requirements, and challenges mentioned in the Job Description.
 3. Highlight the candidate's most relevant skills and past experiences that prove they are a perfect fit.
 4. Output ONLY the raw text of the cover letter. Do not include any surrounding markdown or commentary.
+5. Do NOT include any placeholder text like [Date], [Address], or [Hiring Manager Name]. Start directly with "Dear Hiring Manager," or "Dear Hiring Team at {company_name},".
 """
     try:
         llm = LLMService()

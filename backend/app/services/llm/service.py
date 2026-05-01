@@ -13,6 +13,10 @@ class LLMService:
         self.api_key = settings.gemini_api_key
         self.groq_api_key = settings.groq_api_key
         self.groq_model = settings.groq_model
+        self.primary_provider = settings.primary_llm_provider.lower()
+        self.ollama_base_url = settings.ollama_base_url
+        self.ollama_model = settings.ollama_model
+        self.ollama_api_key = settings.ollama_api_key
 
     def _is_valid_response(self, text: str) -> bool:
         return bool(text and len(text.strip()) > 30)
@@ -85,66 +89,70 @@ class LLMService:
             except (KeyError, IndexError) as e:
                 raise ValueError(f"Unexpected response structure from Groq: {e}")
 
+    async def _ollama_call(self, prompt: str) -> str:
+        url = f"{self.ollama_base_url}/api/chat"
+        payload = {
+            "model": self.ollama_model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "options": {
+                "temperature": 0.7,
+            }
+        }
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        if self.ollama_api_key:
+            headers["Authorization"] = f"Bearer {self.ollama_api_key}"
+        
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            try:
+                response = await client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                return data["message"]["content"]
+            except httpx.RequestError as e:
+                raise ValueError(f"Ollama connection error: {e}")
+            except (KeyError, IndexError) as e:
+                raise ValueError(f"Unexpected response structure from Ollama: {e}")
+
     async def generate(self, prompt: str) -> dict:
         start_time = time.time()
-        success = False
-        text = ""
         
-        # Phase 1: Gemini with Retries + exponential backoff
-        max_attempts = 1 # Free tier rate-limits easily, so we minimize retries
-        for attempt in range(max_attempts):
+        # Order the providers based on the configured primary
+        all_providers = ["gemini", "groq", "ollama"]
+        providers = [self.primary_provider] + [p for p in all_providers if p != self.primary_provider]
+        logger.info(f"Providers order: {providers}")
+        for provider in providers:
+            logger.info(f"Attempting generation with provider: {provider}")
+            text = ""
             try:
-                text = await self._gemini_call(prompt)
-                if self._is_valid_response(text):
-                    success = True
-                    logger.info(f"Gemini generation successful on attempt {attempt}.")
-                    break
+                if provider == "gemini":
+                    text = await self._gemini_call(prompt)
+                elif provider == "groq":
+                    text = await self._groq_call(prompt)
+                elif provider == "ollama":
+                    text = await self._ollama_call(prompt)
                 else:
-                    logger.warning(f"Gemini attempt {attempt} returned invalid/short response.")
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429:
-                    logger.error("Rate limit hit for Gemini. Not retrying.")
-                    break
-                logger.warning(f"Gemini attempt {attempt} failed with HTTP status: {e}")
-            except Exception as e:
-                logger.warning(f"Gemini attempt {attempt} failed: {e}")
-            
-            # Exponential backoff: 2s, 4s before next retry
-            if attempt < max_attempts - 1:
-                wait = 2 ** (attempt + 1)
-                logger.info(f"Waiting {wait}s before retry...")
-                await asyncio.sleep(wait)
+                    logger.warning(f"Unknown provider: {provider}")
+                    continue
                 
-        latency = round(time.time() - start_time, 3)
-        
-        if success:
-            return {
-                "text": self._normalize_output(text),
-                "model": "gemini",
-                "status": "success",
-                "latency_sec": latency
-            }
-            
-        # Phase 2: Groq Fallback Trigger
-        logger.info("Gemini failed or returned invalid response. Triggering fallback to Groq.")
-        
-        try:
-            text = await self._groq_call(prompt)
-            latency = round(time.time() - start_time, 3)
-            if self._is_valid_response(text):
-                logger.info("Groq fallback generation successful.")
-                return {
-                    "text": self._normalize_output(text),
-                    "model": "groq",
-                    "status": "success",
-                    "latency_sec": latency
-                }
-            else:
-                logger.warning("Groq fallback returned invalid response.")
-        except Exception as e:
-            logger.error(f"Groq fallback call failed: {e}")
-            
-        # Both Failed
+                if self._is_valid_response(text):
+                    latency = round(time.time() - start_time, 3)
+                    logger.info(f"{provider.capitalize()} generation successful.")
+                    return {
+                        "text": self._normalize_output(text),
+                        "model": provider,
+                        "status": "success",
+                        "latency_sec": latency
+                    }
+                else:
+                    logger.warning(f"{provider.capitalize()} returned invalid/short response.")
+            except Exception as e:
+                logger.warning(f"{provider.capitalize()} generation failed: {e}")
+                
+        # All Failed
         latency = round(time.time() - start_time, 3)
         return {
             "text": "",
