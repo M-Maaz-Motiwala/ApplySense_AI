@@ -26,11 +26,16 @@ export default async function RootLayout({
             <Link href="/applications" className="text-sm font-semibold text-slate-600 hover:text-indigo-600 transition-colors">Applications</Link>
             
             {token ? (
-              <form action={async () => { "use server"; await logout(); }}>
-                <button type="submit" className="text-sm font-semibold text-red-500 hover:text-red-700 transition-colors">
-                  Logout
-                </button>
-              </form>
+              <div className="flex items-center gap-4 border-l border-slate-200 pl-4 ml-2">
+                <Link href="/dashboard" className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors" title="Dashboard">
+                  👤
+                </Link>
+                <form action={async () => { "use server"; await logout(); }}>
+                  <button type="submit" className="text-sm font-semibold text-slate-500 hover:text-red-600 transition-colors">
+                    Logout
+                  </button>
+                </form>
+              </div>
             ) : (
               <Link href="/auth/login" className="bg-white border border-slate-200 shadow-sm hover:bg-slate-50 text-slate-900 text-sm font-semibold py-1.5 px-4 rounded-md transition-all">
                 Login

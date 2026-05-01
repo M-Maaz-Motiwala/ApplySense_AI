@@ -7,33 +7,57 @@ interface TagInputProps {
   tags: string[];
   onChange: (tags: string[]) => void;
   placeholder?: string;
+  suggestions?: string[];
 }
 
-export function TagInput({ label, tags, onChange, placeholder = "Press Enter to add..." }: TagInputProps) {
+export function TagInput({ label, tags, onChange, placeholder = "Press Enter to add...", suggestions = [] }: TagInputProps) {
   const [inputValue, setInputValue] = useState("");
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
-      const newTag = inputValue.trim();
-      if (newTag && !tags.includes(newTag)) {
-        onChange([...tags, newTag]);
-      }
-      setInputValue("");
+      addTag(inputValue);
     } else if (e.key === "Backspace" && !inputValue && tags.length > 0) {
       onChange(tags.slice(0, -1));
     }
+  };
+
+  const addTag = (val: string) => {
+    const newTag = val.trim();
+    if (newTag && !tags.includes(newTag)) {
+      onChange([...tags, newTag]);
+    }
+    setInputValue("");
   };
 
   const removeTag = (indexToRemove: number) => {
     onChange(tags.filter((_, i) => i !== indexToRemove));
   };
 
+  // Filter out suggestions that are already added
+  const availableSuggestions = suggestions.filter(s => !tags.includes(s));
+
   return (
     <div className="w-full mb-4">
       <label className="block text-sm font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
         {label}
       </label>
+      
+      {availableSuggestions.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {availableSuggestions.map((s, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => addTag(s)}
+              className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1 rounded-md text-xs font-bold hover:bg-emerald-100 transition-colors"
+            >
+              + {s}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="w-full bg-white border border-slate-200 text-slate-900 p-2 rounded-lg shadow-sm focus-within:ring-4 focus-within:ring-indigo-100 focus-within:border-indigo-500 transition-all min-h-[46px] flex flex-wrap gap-2 items-center">
         {tags.map((tag, index) => (
           <span

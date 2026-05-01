@@ -1,6 +1,6 @@
 import { getApplications } from "../../lib/api";
 import Link from "next/link";
-import { SkeletonLine } from "../../../components/ui/Loader";
+import { SkeletonLine } from "../../components/ui/Loader";
 import { Suspense } from "react";
 
 function getStatusBadge(status: string) {

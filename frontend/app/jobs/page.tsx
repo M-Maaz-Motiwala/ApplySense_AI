@@ -1,7 +1,7 @@
 import { getJobs } from "../../lib/api";
 import { getToken } from "../../lib/auth";
 import JobCard from "./JobCard";
-import { SkeletonCard } from "../../../components/ui/Loader";
+import { SkeletonCard } from "../../components/ui/Loader";
 import { Suspense } from "react";
 
 async function JobList() {

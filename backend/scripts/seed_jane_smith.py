@@ -49,7 +49,7 @@ with SyncSessionLocal() as db:
             {
                 "company": "Creative Web Solutions",
                 "dates": "Jun 2019 -- Dec 2020",
-                "title": "Frontend React Developer",
+                "title": "Jun 2019 -- Dec 2020",
                 "location": "Austin, TX",
                 "bullets": [
                     "Built responsive, dynamic web applications using React and TypeScript for various e-commerce clients.",
