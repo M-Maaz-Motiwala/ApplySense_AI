@@ -1,11 +1,14 @@
 .env
 backend/.env
 frontend/.env
-
+__pycache__/
+*.pyc
 frontend/.next
 frontend/node_modules
 backend/.pytest_cache
 backend/node_modules
-backend/__pycache__
+backend/__pycache__/
 venv/*
 test_workflow.sh
+backend/generated/
+backend/celerybeat-schedule
