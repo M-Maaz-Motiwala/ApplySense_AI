@@ -20,7 +20,19 @@ async def lifespan(_: FastAPI):
     yield
 
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+
+# Add CORS Middleware to allow requests from Next.js client components
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 

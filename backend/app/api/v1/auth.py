@@ -49,3 +49,32 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
 
     token = create_access_token(user.id, user.role.value)
     return TokenResponse(access_token=token)
+
+from app.api.deps import get_current_user
+from app.schemas.api import UserUpdateRequest
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: UserProfile = Depends(get_current_user)) -> UserResponse:
+    response = UserResponse.model_validate(current_user)
+    response.phone = decrypt_value(current_user.phone) if current_user.phone else None
+    return response
+
+@router.patch("/profile/draft", response_model=UserResponse)
+async def update_profile_draft(
+    payload: UserUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user)
+) -> UserResponse:
+    update_data = payload.model_dump(exclude_unset=True)
+    if "phone" in update_data and update_data["phone"]:
+        update_data["phone"] = encrypt_value(update_data["phone"])
+        
+    for key, value in update_data.items():
+        setattr(current_user, key, value)
+        
+    await db.commit()
+    await db.refresh(current_user)
+    
+    response = UserResponse.model_validate(current_user)
+    response.phone = decrypt_value(current_user.phone) if current_user.phone else None
+    return response

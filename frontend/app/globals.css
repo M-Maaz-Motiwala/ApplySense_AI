@@ -1,78 +1,37 @@
-:root {
-  --bg: #f5f6f8;
-  --bg-accent: radial-gradient(circle at 10% 0%, #fff6df 0%, transparent 38%),
-    radial-gradient(circle at 90% 100%, #d9edf9 0%, transparent 36%);
-  --ink: #11213a;
-  --muted: #4c5a6d;
-  --surface: #ffffff;
-  --border: #d3d9e2;
-  --primary: #146c58;
-  --danger: #a53535;
-}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-* {
-  box-sizing: border-box;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: "Space Grotesk", "Segoe UI", sans-serif;
-  color: var(--ink);
-  background: var(--bg-accent), var(--bg);
-}
-
-main {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 2rem 1rem 4rem;
-  animation: fadeIn 350ms ease;
-}
-
-h1, h2 {
-  margin-top: 0;
-}
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-  box-shadow: 0 12px 24px -20px rgba(17, 33, 58, 0.45);
-}
-
-.row {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-button {
-  border: none;
-  border-radius: 999px;
-  padding: 0.5rem 1rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-button.approve {
-  background: var(--primary);
-  color: white;
-}
-
-button.reject {
-  background: var(--danger);
-  color: white;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased selection:bg-indigo-100 selection:text-indigo-900;
+    font-family: 'Inter', sans-serif;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300;
   }
+  
+  .auth-container {
+    @apply min-h-screen flex items-center justify-center p-4 bg-slate-50 relative overflow-hidden;
+  }
+  
+  .auth-card {
+    @apply w-full max-w-md p-8 relative z-10;
+  }
+  
+  .input-field {
+    @apply w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all text-slate-900 placeholder:text-slate-400 font-medium;
+  }
+}
+
+/* Custom Animations */
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }

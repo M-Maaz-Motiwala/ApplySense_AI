@@ -31,6 +31,18 @@ class UserCreateRequest(BaseModel):
     role: UserRole = UserRole.USER
 
 
+class UserUpdateRequest(BaseModel):
+    name: str | None = None
+    phone: str | None = None
+    location: str | None = None
+    experience_years: float | None = None
+    desired_roles: list[str] | None = None
+    desired_domains: list[str] | None = None
+    salary_expectation: float | None = None
+    experience_blocks: dict | None = None
+    skills_matrix: dict | None = None
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

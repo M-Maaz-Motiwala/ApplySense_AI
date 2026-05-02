@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     gmail_poll_seconds: int = 1800
     job_ingest_cron: str = "0 7 * * *"
     email_monitor_cron: str = "*/30 * * * *"
+    gmail_credentials_json: str | None = Field(None, alias="GMAIL_CREDENTIALS_JSON")
 
     aes256_key_b64: str = Field(..., alias="AES256_KEY_B64")
 
