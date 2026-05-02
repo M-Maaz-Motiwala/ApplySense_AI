@@ -9,9 +9,18 @@ from app.db.session import get_db
 from app.models import Job, UserProfile
 from app.schemas.api import JobResponse, MatchInsightResponse
 from app.services.matching.engine import match_scoring_engine
-from app.tasks.pipeline import generate_application
+from app.tasks.pipeline import generate_application, job_ingestion
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+@router.post("/refresh")
+async def trigger_job_refresh(
+    _: UserProfile = Depends(get_current_user),
+) -> dict:
+    """Manually trigger the background job ingestion task."""
+    task = job_ingestion.delay()
+    return {"status": "success", "task_id": task.id}
 
 
 @router.get("", response_model=list[JobResponse])

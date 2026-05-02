@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getToken } from "../../lib/auth";
 import { API_BASE } from "../../lib/api";
+import { RefreshJobsButton } from "../../components/ui/RefreshJobsButton";
 
 async function getProfile(token: string) {
   const res = await fetch(`${API_BASE}/auth/me`, {
@@ -69,6 +70,7 @@ export default async function DashboardPage() {
         <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
           <h2 className="text-xl font-bold text-slate-900 mb-4">Quick Actions</h2>
           <div className="space-y-4">
+            <RefreshJobsButton token={token} />
             <Link href="/jobs" className="block p-4 border border-slate-100 rounded-lg hover:border-indigo-200 hover:bg-indigo-50 transition-colors group">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">💼</span>
