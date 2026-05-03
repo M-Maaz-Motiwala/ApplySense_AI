@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     app_name: str = "ApplySense AI"
     env: str = "dev"
     api_v1_prefix: str = "/api/v1"
+    backend_cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://0.0.0.0:3000",
+    ]
 
     secret_key: str = Field(..., alias="SECRET_KEY")
     access_token_expire_minutes: int = 120

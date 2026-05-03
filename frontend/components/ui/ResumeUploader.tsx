@@ -23,7 +23,8 @@ export function ResumeUploader({ onSuccess, token }: ResumeUploaderProps) {
     formData.append("file", file);
 
     try {
-      const res = await fetch("http://localhost:8000/api/v1/resumes/parse", {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
+      const res = await fetch(`${baseUrl}/resumes/parse`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`

@@ -143,6 +143,7 @@ class LLMService:
                     logger.info(f"{provider.capitalize()} generation successful.")
                     return {
                         "text": self._normalize_output(text),
+                        "response": self._normalize_output(text),
                         "model": provider,
                         "status": "success",
                         "latency_sec": latency
@@ -156,6 +157,7 @@ class LLMService:
         latency = round(time.time() - start_time, 3)
         return {
             "text": "",
+            "response": "",
             "model": "none",
             "status": "failed",
             "latency_sec": latency

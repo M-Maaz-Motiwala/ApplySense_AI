@@ -27,7 +27,7 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 # Add CORS Middleware to allow requests from Next.js client components
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[str(origin) for origin in settings.backend_cors_origins],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
