@@ -22,20 +22,29 @@ from app.workers.celery_app import celery_app
 
 
 @celery_app.task(name="app.tasks.pipeline.job_ingestion")
-def job_ingestion() -> dict:
+def job_ingestion(task_id: str | None = None) -> dict:
     import asyncio
     import logging
-    import httpx
-    from bs4 import BeautifulSoup
     from app.services.llm.service import LLMService
+    from app.services.ingestion.search import job_searcher
+    from app.services.ingestion.scraper import job_scraper
+    from app.core.config import get_settings
+    from uuid import UUID
 
     logger = logging.getLogger(__name__)
-    task = Task(type=TaskType.JOB_INGESTION, status=TaskStatus.PROCESSING, result={})
+    settings = get_settings()
     
     with SyncSessionLocal() as db:
-        db.add(task)
-        db.commit()
-        db.refresh(task)
+        if task_id:
+            task = db.get(Task, UUID(task_id))
+            if task:
+                task.status = TaskStatus.PROCESSING
+                db.commit()
+        else:
+            task = Task(type=TaskType.JOB_INGESTION, status=TaskStatus.PROCESSING, result={})
+            db.add(task)
+            db.commit()
+            db.refresh(task)
 
         users = db.execute(select(UserProfile)).scalars().all()
         if not users:
@@ -44,113 +53,133 @@ def job_ingestion() -> dict:
             db.commit()
             return {"inserted": 0}
 
-        # Collect unique search queries from users
-        search_queries = set()
         llm = LLMService()
+        total_inserted = 0
+        all_job_links = set()
         
+        # Step 1: Generate search queries for each user and gather links
         for user in users:
-            # Construct a context for the LLM to generate a search query
-            context = {
-                "roles": user.desired_roles,
-                "domains": user.desired_domains,
-                "experience_level": user.experience_blocks.get("experience_level", ""),
-                "skills": user.skills_matrix,
-                "top_experience": user.experience_blocks.get("experience", [{}])[0].get("title", ""),
-                "coursework": user.experience_blocks.get("coursework", []),
-                "tech": user.experience_blocks.get("projects", [{}])[0].get("tech", "")
+            user_context = {
+                "name": user.name,
+                "location": user.location,
+                "experience_years": user.experience_years,
+                "desired_roles": user.desired_roles,
+                "desired_domains": user.desired_domains,
             }
             
-            prompt = f"""
-            Based on the following user profile context, generate exactly ONE highly optimized job search query string (2-4 words) that would return the most relevant job results on a job board.
-            Return ONLY the query string, nothing else.
+            logger.info(f"Generating search queries for user: {user.email}")
+            queries = asyncio.run(llm.generate_search_queries(
+                user_context, 
+                model=settings.ollama_model
+            ))
             
-            Context: {context}
-            """
-            try:
-                # Use sync wrapper for LLM call
-                result = asyncio.run(llm.generate(prompt))
-                if result["status"] == "success":
-                    query = result["text"].strip().replace('"', '')
-                    if query:
-                        search_queries.add(query)
-                else:
-                    # Fallback to desired roles
-                    for role in user.desired_roles:
-                        search_queries.add(role)
-            except Exception as e:
-                logger.error(f"LLM query generation failed for user {user.id}: {e}")
-                for role in user.desired_roles:
-                    search_queries.add(role)
-
-        if not search_queries:
-            search_queries.add("Software Engineer")
-
-        total_inserted = 0
-        fetched_job_ids = set()
-
-        for query in search_queries:
-            logger.info(f"Searching jobs for query: {query}")
-            url = f"https://www.themuse.com/api/public/jobs?category=Software%20Engineer&page=1&level={query}" 
-            # Note: TheMuse API level filter is specific, but we'll use query as a generic search term if possible.
-            # Since TheMuse API is limited, let's just use it as a keyword in the URL if supported, or just log it.
-            # For this demo, we'll try to use it as a category or similar.
+            # Combine queries with country/location if not already present
+            location_suffix = f" in {user.location}" if user.location else ""
+            enhanced_queries = []
             
-            # Re-fetch with query
-            encoded_query = query.replace(" ", "%20")
-            search_url = f"https://www.themuse.com/api/public/jobs?category={encoded_query}&page=1"
-            
-            try:
-                with httpx.Client() as client:
-                    response = client.get(search_url, timeout=15.0)
-                    if response.status_code == 404:
-                        # Try generic search if category fails
-                        search_url = f"https://www.themuse.com/api/public/jobs?page=1&category=Software%20Engineer"
-                        response = client.get(search_url, timeout=15.0)
-                    
-                    response.raise_for_status()
-                    data = response.json()
+            # Cap at 3 queries to avoid long wait times
+            for i, query in enumerate(queries[:3]):
+                if not isinstance(query, str):
+                    continue
+                full_query = f"{query}{location_suffix}"
                 
-                for item in data.get("results", []):
-                    ext_id = str(item.get("id"))
-                    if ext_id in fetched_job_ids:
+                # Only add site-specific variations for the top query to save time
+                if i < 1 and "site:" not in full_query:
+                    enhanced_queries.append(f"site:linkedin.com/jobs/view {full_query}")
+                    enhanced_queries.append(f"site:naukrigulf.com {full_query}")
+                
+                enhanced_queries.append(full_query)
+            
+            logger.info(f"Searching jobs for {user.email} with {len(enhanced_queries)} optimized queries")
+            user_links = asyncio.run(job_searcher.get_job_links(enhanced_queries))
+            all_job_links.update(user_links)
+
+        logger.info(f"Found {len(all_job_links)} unique job links to process")
+
+        # Step 2: Scrape and parse each job link in parallel
+        links_to_process = list(all_job_links)[:20]
+        logger.info(f"Found {len(all_job_links)} unique job links. Processing top {len(links_to_process)} in parallel...")
+        
+        async def scrape_all():
+            async def process_single_link(link_url):
+                try:
+                    return await job_scraper.process_job_link(link_url)
+                except Exception as e:
+                    logger.error(f"Failed to process {link_url}: {e}")
+                    return None
+            
+            # Run with a safety timeout so one stuck link doesn't kill the whole ingestion
+            try:
+                return await asyncio.wait_for(
+                    asyncio.gather(*[process_single_link(l) for l in links_to_process]),
+                    timeout=60.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Parallel scraping timed out after 60s. Moving forward with available results.")
+                return [] # Or we could try to get partial results, but [] is safer for now
+
+        # Run the parallel scraper wrapper
+        results = asyncio.run(scrape_all())
+        
+        total_inserted = 0
+        processed_jobs = []
+        for job_data in results:
+            if not job_data or not job_data.get("title"):
+                continue
+                
+            try:
+                # Step 3: Filter and save jobs
+                # Check for existing
+                existing = db.execute(
+                    select(Job).where(
+                        Job.external_job_id == job_data["external_job_id"],
+                        Job.source == job_data["source"],
+                    )
+                ).scalar_one_or_none()
+                
+                if not existing:
+                    # Step 3: Profile-based Filtering
+                    # Check if this job is actually relevant to ANY of our users
+                    is_relevant = False
+                    for user in users:
+                        # Match role keywords
+                        role_match = any(role.lower() in job_data["title"].lower() for role in user.desired_roles)
+                        # Match domain keywords (in title or summary)
+                        domain_match = any(domain.lower() in (job_data.get("summary", "") or "").lower() for domain in user.desired_domains)
+                        
+                        if role_match or domain_match:
+                            is_relevant = True
+                            break
+                    
+                    if not is_relevant:
+                        logger.info(f"Skipping job {job_data['title']} - not relevant to any user profiles")
                         continue
-                        
-                    raw_html = item.get("contents", "")
-                    soup = BeautifulSoup(raw_html, "html.parser")
-                    raw_text = soup.get_text(separator="\n", strip=True)
-                    
-                    locations = item.get("locations", [])
-                    location_name = locations[0].get("name") if locations else "Remote"
-                    
-                    payload = {
-                        "external_job_id": ext_id,
-                        "title": item.get("name", "Software Engineer"),
-                        "company": item.get("company", {}).get("name", "Unknown"),
-                        "location": location_name,
-                        "raw_text_jd": raw_text,
-                        "parsed_requirements": {"skills": []},
-                        "source": "TheMuse",
-                        "source_url": item.get("refs", {}).get("landing_page", ""),
-                    }
-                    
-                    existing = db.execute(
-                        select(Job).where(
-                            Job.external_job_id == payload["external_job_id"],
-                            Job.source == payload["source"],
-                        )
-                    ).scalar_one_or_none()
-                    
-                    if not existing:
-                        db.add(Job(**payload))
-                        total_inserted += 1
-                        fetched_job_ids.add(ext_id)
-                        
+
+                    new_job = Job(
+                        external_job_id=job_data["external_job_id"],
+                        title=job_data["title"],
+                        company=job_data["company"],
+                        location=job_data["location"],
+                        raw_text_jd=job_data.get("summary", "") + "\n\n" + (job_data.get("raw_text", "") or job_data.get("title", "")),
+                        parsed_requirements={
+                            "skills": job_data.get("skills", []),
+                            "experience_years": job_data.get("experience_years"),
+                            "country": job_data.get("country"),
+                            "domain": job_data.get("domain")
+                        },
+                        source=job_data["source"],
+                        source_url=job_data["source_url"],
+                    )
+                    db.add(new_job)
+                    total_inserted += 1
+                    processed_jobs.append(job_data["title"])
+
             except Exception as e:
-                logger.error(f"Failed to fetch jobs for query '{query}': {e}")
+                logger.error(f"Error saving job: {e}")
 
         db.commit()
         task.status = TaskStatus.COMPLETED
-        task.result = {"inserted": total_inserted, "queries_ran": list(search_queries)}
+        task.result = {"inserted": total_inserted, "processed_titles": processed_jobs}
         db.commit()
 
     match_and_queue.delay()

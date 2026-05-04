@@ -88,7 +88,8 @@ async function ApplicationDetails({ id }: { id: string }) {
   );
 }
 
-export default function ApplicationDetailPage({ params }: { params: { id: string } }) {
+export default async function ApplicationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   return (
     <main className="py-8">
       <Suspense fallback={
@@ -100,7 +101,7 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
           </div>
         </div>
       }>
-        <ApplicationDetails id={params.id} />
+        <ApplicationDetails id={id} />
       </Suspense>
     </main>
   );

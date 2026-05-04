@@ -16,20 +16,61 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 @router.post("/refresh")
 async def trigger_job_refresh(
+    db: AsyncSession = Depends(get_db),
     _: UserProfile = Depends(get_current_user),
 ) -> dict:
     """Manually trigger the background job ingestion task."""
-    task = job_ingestion.delay()
-    return {"status": "success", "task_id": task.id}
+    from app.models.entities import Task, TaskType, TaskStatus
+    
+    # Create database task record
+    task_db = Task(type=TaskType.JOB_INGESTION, status=TaskStatus.PROCESSING, result={})
+    db.add(task_db)
+    await db.commit()
+    await db.refresh(task_db)
+    
+    # Trigger Celery task with the DB task ID as the Celery task ID
+    job_ingestion.apply_async(
+        kwargs={"task_id": str(task_db.id)},
+        task_id=str(task_db.id)
+    )
+    return {"status": "success", "task_id": str(task_db.id)}
 
 
 @router.get("", response_model=list[JobResponse])
 async def list_jobs(
+    recommended: bool = False,
     db: AsyncSession = Depends(get_db),
-    _: UserProfile = Depends(get_current_user),
+    current_user: UserProfile = Depends(get_current_user),
 ) -> list[JobResponse]:
-    rows = (await db.execute(select(Job).order_by(Job.created_at.desc()))).scalars().all()
-    return [JobResponse.model_validate(row) for row in rows]
+    """List jobs with an optional 'recommended' filter based on user profile."""
+    from app.core.logging import logger
+    
+    stmt = select(Job).order_by(Job.created_at.desc())
+    rows = (await db.execute(stmt)).scalars().all()
+    
+    if not recommended:
+        return [JobResponse.model_validate(job) for job in rows]
+    
+    filtered_jobs = []
+    for job in rows:
+        # 1. Role Match (Strict)
+        role_match = any(role.lower() in job.title.lower() for role in current_user.desired_roles)
+        
+        # 2. Location/Domain Match (Context)
+        location_match = (current_user.location and job.location and 
+                         (current_user.location.lower() in job.location.lower() or 
+                          job.location.lower() in current_user.location.lower()))
+        
+        domain_match = any(domain.lower() in (job.raw_text_jd or "").lower() for domain in current_user.desired_domains)
+        
+        # To be "Relevant", it MUST match the role, and ideally the location or domain
+        if role_match and (location_match or domain_match or not current_user.location):
+            logger.info(f"MATCH: '{job.title}' for {current_user.email} (Role: {role_match}, Loc: {location_match}, Dom: {domain_match})")
+            filtered_jobs.append(job)
+        else:
+            logger.debug(f"SKIP: '{job.title}' for {current_user.email}")
+            
+    return [JobResponse.model_validate(job) for job in filtered_jobs]
 
 
 @router.get("/{job_id}", response_model=JobResponse)

@@ -15,8 +15,9 @@ async function authHeaders(): Promise<HeadersInit> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export async function getJobs() {
-  const res = await fetch(`${API_BASE}/jobs`, {
+export async function getJobs(recommended: boolean = false) {
+  const url = `${API_BASE}/jobs${recommended ? "?recommended=true" : ""}`;
+  const res = await fetch(url, {
     headers: { ...(await authHeaders()) },
     cache: "no-store"
   });

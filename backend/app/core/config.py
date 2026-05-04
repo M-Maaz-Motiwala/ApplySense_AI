@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
 
     gemini_api_key: str | None = Field(None, alias="GEMINI_API_KEY")
+    serper_api_key: str | None = Field(None, alias="SERPER_API_KEY")
     groq_api_key: str | None = Field(None, alias="GROQ_API_KEY")
     groq_model: str = Field("llama3-8b-8192", alias="GROQ_MODEL")
     
@@ -40,6 +41,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = Field("https://ollama.com", alias="OLLAMA_BASE_URL")
     ollama_api_key: str | None = Field(None, alias="OLLAMA_API_KEY")
     ollama_model: str = Field("gpt-oss:20b-cloud", alias="OLLAMA_MODEL")
+    ollama_model_websearch: str = Field("gpt-oss:20b-cloud", alias="OLLAMA_MODEL_WEBSEARCH")
+    ollama_model_scraping: str = Field("gpt-oss:20b-cloud", alias="OLLAMA_MODEL_SCRAPING")
 
     latex_output_dir: str = "./generated/resumes"
     latex_template_path: str = "app/templates/resume_template.tex.j2"
