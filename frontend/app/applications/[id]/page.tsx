@@ -1,5 +1,6 @@
 import { API_BASE } from "../../../lib/api";
 import { getToken } from "../../../lib/auth";
+import ResumeViewer from "./ResumeViewer";
 import ApplicationActions from "./ApplicationActions";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -46,7 +47,7 @@ async function ApplicationDetails({ id }: { id: string }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Left Column: Communications */}
-        <div className="space-y-6">
+        <div className="space-y-6 flex flex-col">
           <section>
             <h2 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
               <span className="text-xl">✉️</span> Recruiter Email Draft
@@ -56,32 +57,27 @@ async function ApplicationDetails({ id }: { id: string }) {
             </div>
           </section>
 
-          <section>
+          <section className="flex-1 flex flex-col">
             <h2 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
               <span className="text-xl">📝</span> Cover Letter
             </h2>
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm whitespace-pre-wrap text-sm text-slate-600 leading-relaxed font-serif">
+            <div className="flex-1 bg-white border border-slate-200 rounded-xl p-5 shadow-sm whitespace-pre-wrap text-sm text-slate-600 leading-relaxed font-serif">
               {app.cover_letter_text}
             </div>
           </section>
 
-          <ApplicationActions applicationId={app.application_id} initialStatus={app.status} token={token} />
+          <div className="mt-auto pt-6">
+            <ApplicationActions applicationId={app.application_id} initialStatus={app.status} token={token} />
+          </div>
         </div>
 
-        {/* Right Column: Resume Source */}
+        {/* Right Column: Resume Viewer */}
         <div className="space-y-6">
-          <section className="h-full flex flex-col">
-            <h2 className="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
-              <span className="text-xl">📄</span> Generated Resume
-            </h2>
-            <p className="text-xs text-slate-500 mb-3 uppercase tracking-wider font-semibold">LaTeX Source Code</p>
-            
-            <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-inner overflow-hidden">
-              <pre className="text-xs text-slate-300 font-mono overflow-y-auto h-full max-h-[700px] custom-scrollbar">
-                {app.resume_latex_source}
-              </pre>
-            </div>
-          </section>
+          <ResumeViewer 
+            applicationId={app.application_id} 
+            latexSource={app.resume_latex_source} 
+            token={token} 
+          />
         </div>
       </div>
     </>

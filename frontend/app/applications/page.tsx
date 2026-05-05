@@ -2,6 +2,7 @@ import { getApplications } from "../../lib/api";
 import Link from "next/link";
 import { SkeletonLine } from "../../components/ui/Loader";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 
 function getStatusBadge(status: string) {
   switch (status) {
@@ -17,7 +18,15 @@ function getStatusBadge(status: string) {
 }
 
 async function ApplicationList() {
-  const apps = await getApplications();
+  let apps;
+  try {
+    apps = await getApplications();
+  } catch (err: any) {
+    if (err.message === "Unauthorized") {
+      redirect("/auth/login");
+    }
+    throw err;
+  }
 
   if (apps.length === 0) {
     return (

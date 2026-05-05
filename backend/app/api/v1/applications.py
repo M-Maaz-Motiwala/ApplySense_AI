@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -129,3 +130,31 @@ async def preview_resume(
         "resume_latex_source": resume.latex_source,
         "resume_pdf_path": resume.pdf_path,
     }
+
+
+@router.get("/{application_id}/resume.pdf")
+async def get_resume_pdf(
+    application_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+):
+    """Serve the generated resume PDF file."""
+    from app.models import ResumeVersion
+    import os
+
+    application = await db.get(Application, application_id)
+    if not application or application.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    if not application.resume_version_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No resume generated yet")
+
+    resume = await db.get(ResumeVersion, application.resume_version_id)
+    if not resume or not resume.pdf_path or not os.path.exists(resume.pdf_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file not found")
+
+    return FileResponse(
+        resume.pdf_path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline"}
+    )

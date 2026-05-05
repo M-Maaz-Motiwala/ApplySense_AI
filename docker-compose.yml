@@ -83,6 +83,14 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+  
+  adminer:
+    image: adminer
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      - postgres
 
 volumes:
   pgdata:

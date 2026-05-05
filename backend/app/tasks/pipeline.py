@@ -126,6 +126,11 @@ def job_ingestion(task_id: str | None = None) -> dict:
         for job_data in results:
             if not job_data or not job_data.get("title"):
                 continue
+            
+            # 1. ROBUST FALLBACKS
+            job_title = job_data.get("title", "Unknown Title")
+            job_company = job_data.get("company") or "Unknown Company"
+            job_location = job_data.get("location") or "Remote"
                 
             try:
                 # Step 3: Filter and save jobs
@@ -139,28 +144,70 @@ def job_ingestion(task_id: str | None = None) -> dict:
                 
                 if not existing:
                     # Step 3: Profile-based Filtering
-                    # Check if this job is actually relevant to ANY of our users
                     is_relevant = False
                     for user in users:
-                        # Match role keywords
-                        role_match = any(role.lower() in job_data["title"].lower() for role in user.desired_roles)
-                        # Match domain keywords (in title or summary)
-                        domain_match = any(domain.lower() in (job_data.get("summary", "") or "").lower() for domain in user.desired_domains)
+                        # Fallback: if user has NO roles or domains specified, consider all jobs in their location relevant
+                        user_roles = user.desired_roles or []
+                        user_domains = user.desired_domains or []
                         
-                        if role_match or domain_match:
+                        if not user_roles and not user_domains:
+                            if user.location and user.location.lower() in job_location.lower():
+                                is_relevant = True
+                                logger.info(f"Job {job_title} accepted as location match for {user.email}")
+                                break
+                            elif not user.location:
+                                is_relevant = True # Fully blank profile -> accept all
+                                break
+
+                        # 2. SEMANTIC KEYWORD EXPANSION
+                        # Check if any user role is a substring of the job title or vice-versa
+                        role_match = any(
+                            role.lower() in job_title.lower() or job_title.lower() in role.lower() 
+                            for role in user_roles
+                        )
+                        
+                        # Skill match (check if job title mentions any of user's key skills)
+                        # Extract all skill names from user's skills_matrix
+                        all_user_skills = []
+                        if isinstance(user.skills_matrix, dict):
+                            # Recursively get all strings from the matrix values
+                            def get_strings(d):
+                                if isinstance(d, list):
+                                    for item in d:
+                                        if isinstance(item, str): all_user_skills.append(item.lower())
+                                elif isinstance(d, dict):
+                                    for v in d.values(): get_strings(v)
+                            get_strings(user.skills_matrix)
+                        
+                        skill_match = any(
+                            skill in job_title.lower() for skill in all_user_skills if len(skill) > 2
+                        )
+
+                        # Domain match (check title and summary)
+                        domain_match = any(
+                            domain.lower() in job_title.lower() or 
+                            domain.lower() in (job_data.get("summary", "") or "").lower() 
+                            for domain in user_domains
+                        )
+                        
+                        if role_match or domain_match or skill_match:
                             is_relevant = True
+                            logger.info(f"Job {job_title} matched for {user.email} (Role: {role_match}, Domain: {domain_match}, Skill: {skill_match})")
                             break
                     
                     if not is_relevant:
-                        logger.info(f"Skipping job {job_data['title']} - not relevant to any user profiles")
+                        logger.info(f"Skipping job {job_title} at {job_company} - no match for any user profile")
                         continue
 
+                    summary = job_data.get("summary") or ""
+                    raw_text = job_data.get("raw_text") or job_title
+                    
                     new_job = Job(
                         external_job_id=job_data["external_job_id"],
-                        title=job_data["title"],
-                        company=job_data["company"],
-                        location=job_data["location"],
-                        raw_text_jd=job_data.get("summary", "") + "\n\n" + (job_data.get("raw_text", "") or job_data.get("title", "")),
+                        title=job_title,
+                        company=job_company,
+                        location=job_location,
+                        raw_text_jd=f"{summary}\n\n{raw_text}",
                         parsed_requirements={
                             "skills": job_data.get("skills", []),
                             "experience_years": job_data.get("experience_years"),
@@ -172,7 +219,7 @@ def job_ingestion(task_id: str | None = None) -> dict:
                     )
                     db.add(new_job)
                     total_inserted += 1
-                    processed_jobs.append(job_data["title"])
+                    processed_jobs.append(job_title)
 
             except Exception as e:
                 logger.error(f"Error saving job: {e}")

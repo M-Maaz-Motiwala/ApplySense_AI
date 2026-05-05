@@ -43,7 +43,8 @@ async def list_jobs(
     current_user: UserProfile = Depends(get_current_user),
 ) -> list[JobResponse]:
     """List jobs with an optional 'recommended' filter based on user profile."""
-    from app.core.logging import logger
+    import logging
+    logger = logging.getLogger(__name__)
     
     stmt = select(Job).order_by(Job.created_at.desc())
     rows = (await db.execute(stmt)).scalars().all()

@@ -16,16 +16,16 @@ class MatchScoringEngine:
 
     def _skill_overlap_score(self, user_skills: set[str], job_skills: set[str]) -> float:
         if not job_skills:
-            return 0.0
+            return 0.5  # Neutral score if job description has no extracted skills
         overlap = user_skills.intersection(job_skills)
         return len(overlap) / max(len(job_skills), 1)
 
     def _experience_alignment_score(self, user_years: float | None, job_desc: str) -> float:
         if user_years is None:
-            return 0.5
+            return 0.7  # Neutral-positive if user hasn't set years
         match = re.search(r"(\d+)\+?\s*years", job_desc.lower())
         if not match:
-            return 0.7
+            return 0.8  # Assume fit if no strict years mentioned
         required = float(match.group(1))
         if required <= 0:
             return 1.0

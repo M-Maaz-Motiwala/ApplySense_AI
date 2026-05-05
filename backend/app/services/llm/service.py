@@ -2,6 +2,8 @@ import asyncio
 import logging
 import time
 import httpx
+import json
+import re
 
 from app.core.config import get_settings
 
@@ -175,8 +177,6 @@ class LLMService:
 
     async def extract_job_data(self, raw_text: str, model: str | None = None) -> dict:
         """Extract structured job data from raw text using the specified model."""
-        import json
-        import re
         prompt = f"""
         Extract the following structured information from the job description provided below. 
         Return ONLY a valid JSON object with the following keys:
@@ -210,8 +210,6 @@ class LLMService:
 
     async def generate_search_queries(self, user_profile: dict, model: str | None = None) -> list[str]:
         """Generate optimized job search queries based on user profile."""
-        import json
-        import re
         prompt = f"""
         Based on the user profile below, generate a list of 5 concise job search query strings.
         Queries should be short (3-6 words) and effective for DuckDuckGo.
