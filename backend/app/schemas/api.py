@@ -86,6 +86,8 @@ class JobResponse(BaseModel):
     source: str
     source_url: str | None
     created_at: datetime
+    match_score: float | None = None
+    advisor: dict | None = None
 
     @field_validator("parsed_requirements", mode="before")
     @classmethod

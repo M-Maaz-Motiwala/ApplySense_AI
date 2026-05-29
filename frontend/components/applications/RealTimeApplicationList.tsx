@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface Application {
   id: string;
@@ -52,7 +53,24 @@ export default function RealTimeApplicationList({
   initialApps: Application[]; 
   token: string;
 }) {
+  const router = useRouter();
   const [apps, setApps] = useState(initialApps);
+  const [navigatingId, setNavigatingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchLatest() {
+      try {
+        const res = await fetch("http://localhost:8000/api/v1/applications", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setApps(data);
+        }
+      } catch (e) {}
+    }
+    fetchLatest();
+  }, [token]);
 
   useEffect(() => {
     const hasProcessing = apps.some(app => app.status === "GENERATING");
@@ -119,12 +137,20 @@ export default function RealTimeApplicationList({
                 Processing...
               </div>
             ) : (
-              <Link 
-                href={`/applications/${app.id}`} 
-                className="bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-indigo-600 font-semibold py-2 px-4 rounded-lg transition-all"
+              <button 
+                onClick={() => {
+                  setNavigatingId(app.id);
+                  router.push(`/applications/${app.id}`);
+                }}
+                disabled={navigatingId === app.id}
+                className={`font-semibold py-2 px-4 rounded-lg transition-all border ${
+                  navigatingId === app.id 
+                    ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed" 
+                    : "bg-slate-50 hover:bg-indigo-50 border-slate-200 hover:border-indigo-200 text-indigo-600"
+                }`}
               >
-                Review Details &rarr;
-              </Link>
+                {navigatingId === app.id ? "Loading..." : "Review Details \u2192"}
+              </button>
             )}
           </div>
         </div>

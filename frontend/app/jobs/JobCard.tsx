@@ -16,8 +16,8 @@ function getClientToken(): string {
 
 export default function JobCard({ job, token }: { job: any; token?: string }) {
   const router = useRouter();
-  const [matchScore, setMatchScore] = useState<number | null>(null);
-  const [advisor, setAdvisor] = useState<any>(null);
+  const [matchScore, setMatchScore] = useState<number | null>(job.match_score ?? null);
+  const [advisor, setAdvisor] = useState<any>(job.advisor ?? null);
   const [loadingMatch, setLoadingMatch] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -53,6 +53,7 @@ export default function JobCard({ job, token }: { job: any; token?: string }) {
       if (res.ok) {
         const data = await res.json();
         setTaskId(data.task_id);
+        router.refresh();
         router.push("/applications");
       }
     } catch (e) {
@@ -73,7 +74,14 @@ export default function JobCard({ job, token }: { job: any; token?: string }) {
       )}
       
       <div className="flex justify-between items-start mb-2">
-        <h2 className="text-xl font-bold text-slate-900 leading-tight">{job.title}</h2>
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 leading-tight">{job.title}</h2>
+          {job.source_url && (
+            <a href={job.source_url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 text-sm hover:underline flex items-center gap-1 mt-1">
+              View Original Job ↗
+            </a>
+          )}
+        </div>
         <span className="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
           {job.source}
         </span>

@@ -201,3 +201,68 @@ async def regenerate_application(
     )
     
     return {"task_id": celery_task.id, "status": "processing"}
+
+@router.get("/{application_id}/interview-prep")
+async def get_interview_prep(
+    application_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+) -> dict:
+    """Generate or retrieve interview prep questions."""
+    import json
+    from app.services.llm.service import LLMService
+
+    application = await db.get(Application, application_id)
+    if not application or application.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    if application.status != ApplicationStatus.APPROVED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only approved applications can have interview prep")
+
+    # If already generated, return it
+    advisor_feedback = application.advisor_feedback or {}
+    if "interview_prep" in advisor_feedback:
+        return advisor_feedback["interview_prep"]
+
+    # Otherwise, generate it
+    job = await db.get(Job, application.job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    prompt = f"""
+    Based on the following job description, generate 5 highly relevant interview questions.
+    For each question, provide a brief tip on how to answer it effectively.
+    Return the result strictly as a JSON array of objects, where each object has 'question' and 'tip' keys.
+    Do not include markdown blocks or any other text.
+    
+    Job Description:
+    {job.raw_text_jd[:2000]}
+    """
+    
+    llm_service = LLMService()
+    result = await llm_service.generate(prompt)
+    if result["status"] == "failed":
+        raise HTTPException(status_code=500, detail="Failed to generate interview prep.")
+        
+    try:
+        import re
+        text = result["text"].strip()
+        # strip markdown if present
+        text = re.sub(r'^```json', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^```', '', text, flags=re.MULTILINE)
+        text = re.sub(r'```$', '', text)
+        questions = json.loads(text.strip())
+    except Exception as e:
+        # Fallback
+        questions = [{"question": "Tell me about your experience related to this role.", "tip": "Focus on the skills mentioned in the job description."}]
+
+    prep_data = {"questions": questions}
+    
+    # Save to db
+    import copy
+    new_feedback = copy.deepcopy(advisor_feedback)
+    new_feedback["interview_prep"] = prep_data
+    application.advisor_feedback = new_feedback
+    await db.commit()
+    
+    return prep_data
