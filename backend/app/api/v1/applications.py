@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models import Application, ApplicationStatus, UserProfile
-from app.schemas.api import ApplicationResponse, ApproveRejectResponse
+from app.models import Application, ApplicationStatus, UserProfile, Job
+from app.schemas.api import ApplicationResponse, ApproveRejectResponse, RegenerationRequest
+from app.tasks.pipeline import generate_application
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -19,10 +20,12 @@ async def list_applications(
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
 ) -> list[ApplicationResponse]:
+    from sqlalchemy.orm import selectinload
     rows = (
         await db.execute(
             select(Application)
             .where(Application.user_id == current_user.id)
+            .options(selectinload(Application.job))
             .order_by(Application.last_updated.desc())
         )
     ).scalars().all()
@@ -110,7 +113,14 @@ async def preview_resume(
     """Preview the generated resume LaTeX source and PDF path before approving."""
     from app.models import ResumeVersion
 
-    application = await db.get(Application, application_id)
+    from sqlalchemy.orm import selectinload
+    stmt = (
+        select(Application)
+        .where(Application.id == application_id)
+        .options(selectinload(Application.job))
+    )
+    application = (await db.execute(stmt)).scalar_one_or_none()
+    
     if not application or application.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
 
@@ -129,6 +139,10 @@ async def preview_resume(
         "email_draft": application.email_draft,
         "resume_latex_source": resume.latex_source,
         "resume_pdf_path": resume.pdf_path,
+        "advisor_feedback": application.advisor_feedback,
+        "job_title": application.job.title,
+        "company": application.job.company,
+        "job_url": application.job.source_url,
     }
 
 
@@ -158,3 +172,32 @@ async def get_resume_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": "inline"}
     )
+
+
+@router.post("/{application_id}/regenerate")
+async def regenerate_application(
+    application_id: UUID,
+    request: RegenerationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+) -> dict:
+    """Regenerate an application with user-approved skills from the critique."""
+    application = await db.get(Application, application_id)
+    if not application or application.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    job = await db.get(Job, application.job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    # Trigger regeneration task
+    # We pass the approved skills so the AI knows it can use them
+    celery_task = generate_application.delay(
+        str(job.id), 
+        str(current_user.id), 
+        application.match_score,
+        approved_skills=request.approved_skills,
+        approved_critique=request.approved_critique
+    )
+    
+    return {"task_id": celery_task.id, "status": "processing"}

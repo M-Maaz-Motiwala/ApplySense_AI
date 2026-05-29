@@ -17,6 +17,7 @@ class UserRole(str, enum.Enum):
 
 class ApplicationStatus(str, enum.Enum):
     DRAFT = "DRAFT"
+    GENERATING = "GENERATING"
     PENDING_APPROVAL = "PENDING_APPROVAL"
     APPROVED = "APPROVED"
     SUBMITTED = "SUBMITTED"
@@ -25,11 +26,11 @@ class ApplicationStatus(str, enum.Enum):
 
 
 class TaskType(str, enum.Enum):
-    RESUME_GENERATION = "resume_generation"
-    EMAIL_GENERATION = "email_generation"
-    JOB_INGESTION = "job_ingestion"
-    MATCHING = "matching"
-    EMAIL_MONITORING = "email_monitoring"
+    RESUME_GENERATION = "RESUME_GENERATION"
+    EMAIL_GENERATION = "EMAIL_GENERATION"
+    JOB_INGESTION = "JOB_INGESTION"
+    MATCHING = "MATCHING"
+    EMAIL_MONITORING = "EMAIL_MONITORING"
 
 
 class TaskStatus(str, enum.Enum):
@@ -120,6 +121,7 @@ class Application(Base):
         nullable=False,
     )
     follow_up_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    advisor_feedback: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
 
     user: Mapped[UserProfile] = relationship(back_populates="applications")
     job: Mapped[Job] = relationship(back_populates="applications")

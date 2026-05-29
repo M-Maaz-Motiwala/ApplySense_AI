@@ -1,7 +1,8 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from typing import Any
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 from app.models import ApplicationStatus, TaskStatus, TaskType, UserRole
 
@@ -86,6 +87,15 @@ class JobResponse(BaseModel):
     source_url: str | None
     created_at: datetime
 
+    @field_validator("parsed_requirements", mode="before")
+    @classmethod
+    def validate_requirements(cls, v: Any) -> dict:
+        if isinstance(v, list):
+            return {}
+        if v is None:
+            return {}
+        return v
+
 
 class ResumeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -113,6 +123,8 @@ class ApplicationResponse(BaseModel):
     applied_at: datetime | None
     last_updated: datetime
     follow_up_required: bool
+    advisor_feedback: dict
+    job: JobResponse | None = None
 
 
 class TaskResponse(BaseModel):
@@ -128,6 +140,7 @@ class TaskResponse(BaseModel):
 class MatchInsightResponse(BaseModel):
     score: float
     reason: str
+    advisor: dict = {}
 
 
 class WebhookJobsPayload(BaseModel):
@@ -145,3 +158,8 @@ class WebhookEmailPayload(BaseModel):
 class ApproveRejectResponse(BaseModel):
     application_id: UUID
     status: ApplicationStatus
+
+
+class RegenerationRequest(BaseModel):
+    approved_skills: list[str] = []
+    approved_critique: list[str] = []

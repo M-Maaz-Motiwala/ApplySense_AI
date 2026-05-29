@@ -37,7 +37,10 @@ class Settings(BaseSettings):
     groq_api_key: str | None = Field(None, alias="GROQ_API_KEY")
     groq_model: str = Field("llama3-8b-8192", alias="GROQ_MODEL")
     
-    primary_llm_provider: str = Field("ollama", alias="PRIMARY_LLM_PROVIDER")
+    hf_token: str | None = Field(None, alias="HF_TOKEN")
+    hf_model: str = Field("MiniMaxAI/MiniMax-M2.7:novita", alias="HF_MODEL")
+    
+    primary_llm_provider: str = Field("huggingface", alias="PRIMARY_LLM_PROVIDER")
     ollama_base_url: str = Field("https://ollama.com", alias="OLLAMA_BASE_URL")
     ollama_api_key: str | None = Field(None, alias="OLLAMA_API_KEY")
     ollama_model: str = Field("gpt-oss:20b-cloud", alias="OLLAMA_MODEL")

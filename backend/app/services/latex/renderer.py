@@ -24,7 +24,20 @@ class LatexRenderer:
         self.template_name = template_path.name
 
     def _escape_text(self, value: str) -> str:
-        return re.sub(r"[&%$_#]", lambda m: LATEX_ESCAPE[m.group(0)], value)
+        if not value:
+            return ""
+        # 1. Basic LaTeX character escaping
+        escaped = re.sub(r"[&%$_#]", lambda m: LATEX_ESCAPE[m.group(0)], value)
+        # 2. Problematic Unicode characters
+        # U+202F is Narrow No-Break Space, often used by LLMs before units
+        escaped = escaped.replace("\u202f", " ")
+        # U+2011 is Non-Breaking Hyphen
+        escaped = escaped.replace("\u2011", "-")
+        # Smart quotes and dashes
+        escaped = escaped.replace("\u201c", "``").replace("\u201d", "''")
+        escaped = escaped.replace("\u2018", "`").replace("\u2019", "'")
+        escaped = escaped.replace("\u2013", "--").replace("\u2014", "---")
+        return escaped
 
     def _escape_payload(self, payload: dict) -> dict:
         escaped = {}

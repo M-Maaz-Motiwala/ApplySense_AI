@@ -21,6 +21,8 @@ class LLMService:
         self.ollama_model_websearch = settings.ollama_model_websearch
         self.ollama_model_scraping = settings.ollama_model_scraping
         self.ollama_api_key = settings.ollama_api_key
+        self.hf_token = settings.hf_token
+        self.hf_model = settings.hf_model
 
     def _is_valid_response(self, text: str) -> bool:
         return bool(text and len(text.strip()) > 30)
@@ -29,6 +31,11 @@ class LLMService:
         if not text:
             return ""
         
+        # If it looks like JSON, don't normalize it as it might break the structure
+        trimmed = text.strip()
+        if (trimmed.startswith("{") and trimmed.endswith("}")) or (trimmed.startswith("[") and trimmed.endswith("]")):
+            return trimmed
+            
         # Clean extra whitespace
         lines = [line.strip() for line in text.splitlines()]
         cleaned_lines = []
@@ -38,7 +45,7 @@ class LLMService:
             elif cleaned_lines and cleaned_lines[-1] != "":
                 cleaned_lines.append("")
         
-        # Ensure consistent bullet formatting
+        # Ensure consistent bullet formatting for plain text (e.g. cover letters)
         bullet_cleaned = []
         for line in cleaned_lines:
             if line.startswith(("* ", "+ ")):
@@ -93,6 +100,32 @@ class LLMService:
             except (KeyError, IndexError) as e:
                 raise ValueError(f"Unexpected response structure from Groq: {e}")
 
+    async def _hf_call(self, prompt: str) -> str:
+        if not self.hf_token:
+            raise ValueError("Hugging Face token is not configured.")
+            
+        url = "https://router.huggingface.co/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.hf_token}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": self.hf_model,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+            if not response.is_success:
+                logger.error(f"HF Router Error Detail: {response.text}")
+            response.raise_for_status()
+            data = response.json()
+            
+            try:
+                return data["choices"][0]["message"]["content"]
+            except (KeyError, IndexError) as e:
+                raise ValueError(f"Unexpected response structure from HF: {e}")
+
     async def _ollama_call(self, prompt: str, model: str | None = None) -> str:
         url = f"{self.ollama_base_url}/api/chat"
         target_model = model or self.ollama_model
@@ -133,7 +166,7 @@ class LLMService:
         start_time = time.time()
         
         # Order the providers based on the configured primary
-        all_providers = ["gemini", "groq", "ollama"]
+        all_providers = ["huggingface", "ollama", "gemini", "groq"]
         providers = [self.primary_provider] + [p for p in all_providers if p != self.primary_provider]
         logger.info(f"Providers order: {providers}")
         for provider in providers:
@@ -146,6 +179,8 @@ class LLMService:
                     text = await self._groq_call(prompt)
                 elif provider == "ollama":
                     text = await self._ollama_call(prompt, model=kwargs.get("model"))
+                elif provider == "huggingface":
+                    text = await self._hf_call(prompt)
                 else:
                     logger.warning(f"Unknown provider: {provider}")
                     continue

@@ -91,7 +91,8 @@ class JobSearcher:
             return []
 
         url = "https://google.serper.dev/search"
-        payload = {"q": query}
+        # qdr:m = past month
+        payload = {"q": query, "tbs": "qdr:m"}
         headers = {
             'X-API-KEY': self.serper_api_key,
             'Content-Type': 'application/json'
@@ -105,9 +106,26 @@ class JobSearcher:
                     links = []
                     # Extract links from organic results
                     for result in data.get("organic", []):
-                        if "link" in result:
-                            links.append(result["link"])
-                    logger.info(f"Serper found {len(links)} links for query '{query}'")
+                        link = result.get("link")
+                        date_str = result.get("date", "").lower()
+                        snippet = result.get("snippet", "").lower()
+                        
+                        # Guard against old or closed results
+                        is_old = any(x in date_str or x in snippet for x in ["year ago", "years ago"])
+                        is_closed = any(x in snippet for x in ["no longer accepting applications", "hiring has closed", "application closed"])
+                        
+                        # If months are mentioned, only allow "1 month ago" or "a month ago"
+                        if "month" in date_str:
+                            if not any(x in date_str for x in ["1 month", "a month", "0 month"]):
+                                is_old = True
+
+                        if link and not is_old and not is_closed:
+                            links.append(link)
+                        elif is_old or is_closed:
+                            reason = "OLD" if is_old else "CLOSED"
+                            logger.info(f"Skipping {reason} job link: {link}")
+                            
+                    logger.info(f"Serper found {len(links)} fresh links for query '{query}'")
                     return links
                 else:
                     logger.error(f"Serper API returned {response.status_code}: {response.text}")

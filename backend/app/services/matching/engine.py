@@ -48,11 +48,16 @@ class MatchScoringEngine:
         return max(0.0, min(1.0, sim))
 
     async def calculate(self, user: UserProfile, job: Job) -> dict[str, Any]:
-        user_skills = set(
-            skill.lower()
-            for skill in (user.skills_matrix.get("skills", []) if isinstance(user.skills_matrix, dict) else [])
-        )
-        jd_skills = set(skill.lower() for skill in job.parsed_requirements.get("skills", []))
+        user_skills_list = []
+        if isinstance(user.skills_matrix, dict):
+            user_skills_list.extend(user.skills_matrix.get("languages", []))
+            user_skills_list.extend(user.skills_matrix.get("frameworks", []))
+            user_skills_list.extend(user.skills_matrix.get("tools", []))
+            user_skills_list.extend(user.skills_matrix.get("skills", []))
+            
+        user_skills = set(s.lower() for s in user_skills_list)
+        job_reqs = job.parsed_requirements if isinstance(job.parsed_requirements, dict) else {}
+        jd_skills = set(skill.lower() for skill in job_reqs.get("skills", []))
 
         skill_overlap = self._skill_overlap_score(user_skills, jd_skills)
         exp_alignment = self._experience_alignment_score(user.experience_years, job.raw_text_jd)
@@ -64,12 +69,28 @@ class MatchScoringEngine:
         weighted = 100.0 * ((0.45 * skill_overlap) + (0.25 * exp_alignment) + (0.30 * semantic_similarity))
         score = round(min(max(weighted, 0.0), 100.0), 2)
 
+        # Advisor Data
+        missing = list(jd_skills - user_skills)
+        strengths = list(user_skills.intersection(jd_skills))
+        
+        # Confidence logic
+        confidence = "High" if score >= 80 else "Moderate" if score >= 60 else "Low"
+        
         reason = (
             f"Skill overlap {math.floor(skill_overlap * 100)}%, "
             f"experience alignment {math.floor(exp_alignment * 100)}%, "
             f"semantic similarity {math.floor(semantic_similarity * 100)}%."
         )
-        return {"score": score, "reason": reason}
+        return {
+            "score": score, 
+            "reason": reason,
+            "advisor": {
+                "missing_skills": missing[:5],
+                "strengths": strengths[:5],
+                "confidence": confidence,
+                "readiness_score": math.floor(score * 0.95) # Slight penalty for interview readiness
+            }
+        }
 
 
 match_scoring_engine = MatchScoringEngine()

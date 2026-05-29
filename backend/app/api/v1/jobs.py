@@ -29,7 +29,8 @@ async def trigger_job_refresh(
     await db.refresh(task_db)
     
     # Trigger Celery task with the DB task ID as the Celery task ID
-    job_ingestion.apply_async(
+    from app.tasks.pipeline import job_ingestion_v2
+    job_ingestion_v2.apply_async(
         kwargs={"task_id": str(task_db.id)},
         task_id=str(task_db.id)
     )
@@ -64,9 +65,20 @@ async def list_jobs(
         
         domain_match = any(domain.lower() in (job.raw_text_jd or "").lower() for domain in current_user.desired_domains)
         
-        # To be "Relevant", it MUST match the role, and ideally the location or domain
-        if role_match and (location_match or domain_match or not current_user.location):
-            logger.info(f"MATCH: '{job.title}' for {current_user.email} (Role: {role_match}, Loc: {location_match}, Dom: {domain_match})")
+        # 3. Experience Match
+        requirements = job.parsed_requirements if isinstance(job.parsed_requirements, dict) else {}
+        job_exp = requirements.get("experience_years")
+        exp_match = True
+        if job_exp is not None and current_user.experience_years is not None:
+            try:
+                # Match if user has at least (job_required - 2) years of experience
+                exp_match = (float(current_user.experience_years) >= float(job_exp) - 2)
+            except (ValueError, TypeError):
+                exp_match = True # Fallback to permissive match on parse error
+        
+        # To be "Relevant", it MUST match the role and experience, and ideally the location or domain
+        if role_match and exp_match and (location_match or domain_match or not current_user.location):
+            logger.info(f"MATCH: '{job.title}' for {current_user.email} (Role: {role_match}, Exp: {exp_match})")
             filtered_jobs.append(job)
         else:
             logger.debug(f"SKIP: '{job.title}' for {current_user.email}")

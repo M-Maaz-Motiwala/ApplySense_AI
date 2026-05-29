@@ -233,6 +233,124 @@ def job_ingestion(task_id: str | None = None) -> dict:
     return {"inserted": total_inserted}
 
 
+@celery_app.task(name="app.tasks.pipeline.job_ingestion_v2")
+def job_ingestion_v2(task_id: str | None = None) -> dict:
+    """Manually trigger the background job ingestion task with progress tracking."""
+    import asyncio
+    import logging
+    from app.services.llm.service import LLMService
+    from app.services.ingestion.search import job_searcher
+    from app.services.ingestion.scraper import job_scraper
+    from app.core.config import get_settings
+    from uuid import UUID
+
+    logger = logging.getLogger(__name__)
+    settings = get_settings()
+    
+    with SyncSessionLocal() as db:
+        if task_id:
+            task = db.get(Task, UUID(task_id))
+            if task:
+                task.status = TaskStatus.PROCESSING
+                task.result = {"progress": 10, "status_message": "Analyzing user profiles..."}
+                db.commit()
+        else:
+            task = Task(type=TaskType.JOB_INGESTION, status=TaskStatus.PROCESSING, result={"progress": 10, "status_message": "Initializing..."})
+            db.add(task)
+            db.commit()
+            db.refresh(task)
+
+        users = db.execute(select(UserProfile)).scalars().all()
+        if not users:
+            logger.warning("No users found for job ingestion.")
+            task.status = TaskStatus.COMPLETED
+            task.result = {"inserted": 0, "progress": 100}
+            db.commit()
+            return {"inserted": 0}
+
+        llm = LLMService()
+        total_inserted = 0
+        all_job_links = set()
+        
+        # Step 1: Generate search queries
+        task.result = {"progress": 20, "status_message": "Generating optimized search queries..."}
+        db.commit()
+
+        for user in users:
+            user_context = {
+                "name": user.name,
+                "location": user.location,
+                "experience_years": user.experience_years,
+                "desired_roles": user.desired_roles,
+                "desired_domains": user.desired_domains,
+            }
+            
+            queries = asyncio.run(llm.generate_search_queries(user_context))
+            location_suffix = f" in {user.location}" if user.location else ""
+            enhanced_queries = [f"{q}{location_suffix}" for q in queries[:2]]
+            
+            user_links = asyncio.run(job_searcher.get_job_links(enhanced_queries))
+            all_job_links.update(user_links)
+
+        task.result = {"progress": 40, "status_message": f"Found {len(all_job_links)} jobs. Scaping details..."}
+        db.commit()
+
+        # Step 2: Scrape
+        links_to_process = list(all_job_links)[:15]
+        
+        async def scrape_all():
+            async def process_single_link(link_url):
+                try:
+                    return await job_scraper.process_job_link(link_url)
+                except Exception as e:
+                    return None
+            return await asyncio.gather(*[process_single_link(l) for l in links_to_process])
+
+        results = asyncio.run(scrape_all())
+        
+        task.result = {"progress": 70, "status_message": "Filtering and saving relevant jobs..."}
+        db.commit()
+
+        total_inserted = 0
+        processed_titles = []
+        for job_data in results:
+            if not job_data or not job_data.get("title"):
+                continue
+            
+            # Check for existing
+            existing = db.execute(
+                select(Job).where(Job.external_job_id == job_data["external_job_id"])
+            ).scalar_one_or_none()
+            
+            if not existing:
+                new_job = Job(
+                    external_job_id=job_data["external_job_id"],
+                    title=job_data["title"],
+                    company=job_data.get("company") or "Unknown",
+                    location=job_data.get("location") or "Remote",
+                    raw_text_jd=(job_data.get("summary") or "") + "\n" + (job_data.get("raw_text") or ""),
+                    parsed_requirements=job_data.get("skills") or [],
+                    source=job_data["source"],
+                    source_url=job_data["source_url"],
+                )
+                db.add(new_job)
+                total_inserted += 1
+                processed_titles.append(job_data["title"])
+
+        db.commit()
+        task.status = TaskStatus.COMPLETED
+        task.result = {
+            "inserted": total_inserted, 
+            "progress": 100, 
+            "status_message": "Job search complete!",
+            "processed_titles": processed_titles
+        }
+        db.commit()
+
+    match_and_queue.delay()
+    return {"inserted": total_inserted}
+
+
 @celery_app.task(name="app.tasks.pipeline.match_and_queue")
 def match_and_queue() -> dict:
     task = Task(type=TaskType.MATCHING, status=TaskStatus.PROCESSING, result={})
@@ -265,7 +383,7 @@ def _sync_calculate_match(user: UserProfile, job: Job) -> dict:
 
 
 @celery_app.task(name="app.tasks.pipeline.generate_application")
-def generate_application(job_id: str, user_id: str, match_score: float) -> dict:
+def generate_application(job_id: str, user_id: str, match_score: float, approved_skills: list[str] | None = None, approved_critique: list[str] | None = None) -> dict:
     task = Task(type=TaskType.RESUME_GENERATION, status=TaskStatus.PROCESSING, result={})
 
     with SyncSessionLocal() as db:
@@ -284,6 +402,35 @@ def generate_application(job_id: str, user_id: str, match_score: float) -> dict:
         from app.core.encryption import decrypt_value
         decrypted_phone = decrypt_value(user.phone) if user.phone else ""
 
+        # Get initial advisor data from match engine
+        insight = _sync_calculate_match(user, job)
+        advisor_data = insight.get("advisor", {})
+
+        # 1. Create or Update Application record with GENERATING status
+        application = db.execute(
+            select(Application).where(Application.user_id == user.id, Application.job_id == job.id)
+        ).scalar_one_or_none()
+
+        if not application:
+            application = Application(
+                user_id=user.id,
+                job_id=job.id,
+                status=ApplicationStatus.GENERATING,
+                match_score=match_score,
+                advisor_feedback=advisor_data,
+            )
+            db.add(application)
+        else:
+            application.status = ApplicationStatus.GENERATING
+            application.match_score = match_score
+        
+        db.commit()
+        db.refresh(application)
+
+        task.result = {"progress": 10, "status_message": "AI Agent analyzing job requirements..."}
+        application.advisor_feedback = {**application.advisor_feedback, "progress": 10, "status_message": "AI Agent analyzing job requirements..."}
+        db.commit()
+
         resume_state = resume_graph.invoke(
             {
                 "user_profile": {
@@ -297,8 +444,19 @@ def generate_application(job_id: str, user_id: str, match_score: float) -> dict:
                     "skills_matrix": user.skills_matrix,
                 },
                 "job_description": job.raw_text_jd,
+                "approved_skills": approved_skills or [],
+                "approved_critique": approved_critique or [],
             }
         )
+        # Merge Resume Graph feedback into advisor data
+        advisor_data["quality_score"] = resume_state.get("quality_score", 0)
+        advisor_data["critique"] = resume_state.get("critique", [])
+        advisor_data["attempts"] = resume_state.get("attempts", 0)
+
+        task.result = {"progress": 60, "status_message": "Generating tailored LaTeX source..."}
+        application.advisor_feedback = {**application.advisor_feedback, "progress": 60, "status_message": "Generating tailored LaTeX source..."}
+        db.commit()
+
         latex_result = latex_renderer.render_and_compile(resume_state["optimized_json"], user_id=str(user.id), job_id=str(job.id))
         resume_version = ResumeVersion(
             user_id=user.id,
@@ -326,18 +484,16 @@ def generate_application(job_id: str, user_id: str, match_score: float) -> dict:
         cover_letter_file = output_dir / "coverletter.txt"
         cover_letter_file.write_text(email_state["cover_letter_text"], encoding="utf-8")
 
-        application = Application(
-            user_id=user.id,
-            job_id=job.id,
-            status=ApplicationStatus.PENDING_APPROVAL,
-            match_score=match_score,
-            resume_version_id=resume_version.id,
-            cover_letter_text=email_state["cover_letter_text"],
-            email_draft=email_state["recruiter_email_draft"],
-            recruiter_email=None,
-            follow_up_required=False,
-        )
-        db.add(application)
+        task.result = {"progress": 85, "status_message": "Compiling PDF and finalizing documents..."}
+        application.advisor_feedback = {**application.advisor_feedback, "progress": 85, "status_message": "Compiling PDF and finalizing documents..."}
+        db.commit()
+
+        application.status = ApplicationStatus.PENDING_APPROVAL
+        application.resume_version_id = resume_version.id
+        application.cover_letter_text = email_state["cover_letter_text"]
+        application.email_draft = email_state["recruiter_email_draft"]
+        application.advisor_feedback = advisor_data
+        
         db.flush()
 
         task.status = TaskStatus.COMPLETED
@@ -345,6 +501,7 @@ def generate_application(job_id: str, user_id: str, match_score: float) -> dict:
             "application_id": str(application.id),
             "resume_version_id": str(resume_version.id),
             "status": ApplicationStatus.PENDING_APPROVAL.value,
+            "quality_score": advisor_data["quality_score"]
         }
         db.commit()
 

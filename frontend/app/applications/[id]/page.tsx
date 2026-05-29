@@ -2,6 +2,7 @@ import { API_BASE } from "../../../lib/api";
 import { getToken } from "../../../lib/auth";
 import ResumeViewer from "./ResumeViewer";
 import ApplicationActions from "./ApplicationActions";
+import CritiqueSection from "./CritiqueSection";
 import Link from "next/link";
 import { Suspense } from "react";
 import { SkeletonCard, SkeletonLine } from "../../../components/ui/Loader";
@@ -38,7 +39,12 @@ async function ApplicationDetails({ id }: { id: string }) {
           <Link href="/applications" className="text-indigo-600 hover:text-indigo-800 font-semibold text-sm mb-2 inline-flex items-center gap-1">
             &larr; Back to Dashboard
           </Link>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Application Review</h1>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+            Review for {app.job_title}
+          </h1>
+          <p className="text-slate-500 font-medium mt-1">
+            {app.company} • <a href={app.job_url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">View Original Job &nearr;</a>
+          </p>
         </div>
         <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-2 rounded-lg font-bold shadow-sm">
           Match Score: <span className="text-indigo-900 text-xl">{app.match_score}%</span>
@@ -48,6 +54,14 @@ async function ApplicationDetails({ id }: { id: string }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Left Column: Communications */}
         <div className="space-y-6 flex flex-col">
+          {app.advisor_feedback && (
+            <CritiqueSection 
+              applicationId={app.application_id} 
+              feedback={app.advisor_feedback} 
+              token={token} 
+            />
+          )}
+
           <section>
             <h2 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
               <span className="text-xl">✉️</span> Recruiter Email Draft
