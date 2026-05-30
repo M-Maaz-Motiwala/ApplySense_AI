@@ -40,12 +40,12 @@ class Settings(BaseSettings):
     hf_token: str | None = Field(None, alias="HF_TOKEN")
     hf_model: str = Field("MiniMaxAI/MiniMax-M2.7:novita", alias="HF_MODEL")
     
-    primary_llm_provider: str = Field("huggingface", alias="PRIMARY_LLM_PROVIDER")
+    primary_llm_provider: str = Field("ollama", alias="PRIMARY_LLM_PROVIDER")
     ollama_base_url: str = Field("https://ollama.com", alias="OLLAMA_BASE_URL")
     ollama_api_key: str | None = Field(None, alias="OLLAMA_API_KEY")
-    ollama_model: str = Field("gpt-oss:20b-cloud", alias="OLLAMA_MODEL")
-    ollama_model_websearch: str = Field("gpt-oss:20b-cloud", alias="OLLAMA_MODEL_WEBSEARCH")
-    ollama_model_scraping: str = Field("gpt-oss:20b-cloud", alias="OLLAMA_MODEL_SCRAPING")
+    ollama_model: str = Field("nemotron-3-super:cloud", alias="OLLAMA_MODEL")
+    ollama_model_websearch: str = Field("nemotron-3-super:cloud", alias="OLLAMA_MODEL_WEBSEARCH")
+    ollama_model_scraping: str = Field("nemotron-3-super:cloud", alias="OLLAMA_MODEL_SCRAPING")
 
     latex_output_dir: str = "./generated/resumes"
     latex_template_path: str = "app/templates/resume_template.tex.j2"

@@ -37,7 +37,7 @@ export default async function HomePage() {
             </Link>
           ) : (
             <Link 
-              href="/applications" 
+              href="/dashboard" 
               className="bg-white hover:bg-slate-50 text-indigo-600 border border-indigo-200 font-bold py-3 px-8 rounded-lg shadow-sm hover:shadow-md transition-all"
             >
               View Dashboard
