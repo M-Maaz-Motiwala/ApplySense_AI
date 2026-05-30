@@ -1,6 +1,8 @@
 import { API_BASE } from "../../../lib/api";
 import { getToken } from "../../../lib/auth";
+import ResumeViewer from "./ResumeViewer";
 import ApplicationActions from "./ApplicationActions";
+import CritiqueSection from "./CritiqueSection";
 import Link from "next/link";
 import { Suspense } from "react";
 import { SkeletonCard, SkeletonLine } from "../../../components/ui/Loader";
@@ -37,7 +39,12 @@ async function ApplicationDetails({ id }: { id: string }) {
           <Link href="/applications" className="text-indigo-600 hover:text-indigo-800 font-semibold text-sm mb-2 inline-flex items-center gap-1">
             &larr; Back to Dashboard
           </Link>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Application Review</h1>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+            Review for {app.job_title}
+          </h1>
+          <p className="text-slate-500 font-medium mt-1">
+            {app.company} • <a href={app.job_url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">View Original Job &nearr;</a>
+          </p>
         </div>
         <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-2 rounded-lg font-bold shadow-sm">
           Match Score: <span className="text-indigo-900 text-xl">{app.match_score}%</span>
@@ -46,7 +53,15 @@ async function ApplicationDetails({ id }: { id: string }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Left Column: Communications */}
-        <div className="space-y-6">
+        <div className="space-y-6 flex flex-col">
+          {app.advisor_feedback && (
+            <CritiqueSection 
+              applicationId={app.application_id} 
+              feedback={app.advisor_feedback} 
+              token={token} 
+            />
+          )}
+
           <section>
             <h2 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
               <span className="text-xl">✉️</span> Recruiter Email Draft
@@ -56,39 +71,35 @@ async function ApplicationDetails({ id }: { id: string }) {
             </div>
           </section>
 
-          <section>
+          <section className="flex-1 flex flex-col">
             <h2 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
               <span className="text-xl">📝</span> Cover Letter
             </h2>
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm whitespace-pre-wrap text-sm text-slate-600 leading-relaxed font-serif">
+            <div className="flex-1 bg-white border border-slate-200 rounded-xl p-5 shadow-sm whitespace-pre-wrap text-sm text-slate-600 leading-relaxed font-serif">
               {app.cover_letter_text}
             </div>
           </section>
 
-          <ApplicationActions applicationId={app.application_id} initialStatus={app.status} token={token} />
+          <div className="mt-auto pt-6">
+            <ApplicationActions applicationId={app.application_id} initialStatus={app.status} token={token} />
+          </div>
         </div>
 
-        {/* Right Column: Resume Source */}
+        {/* Right Column: Resume Viewer */}
         <div className="space-y-6">
-          <section className="h-full flex flex-col">
-            <h2 className="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
-              <span className="text-xl">📄</span> Generated Resume
-            </h2>
-            <p className="text-xs text-slate-500 mb-3 uppercase tracking-wider font-semibold">LaTeX Source Code</p>
-            
-            <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-inner overflow-hidden">
-              <pre className="text-xs text-slate-300 font-mono overflow-y-auto h-full max-h-[700px] custom-scrollbar">
-                {app.resume_latex_source}
-              </pre>
-            </div>
-          </section>
+          <ResumeViewer 
+            applicationId={app.application_id} 
+            latexSource={app.resume_latex_source} 
+            token={token} 
+          />
         </div>
       </div>
     </>
   );
 }
 
-export default function ApplicationDetailPage({ params }: { params: { id: string } }) {
+export default async function ApplicationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   return (
     <main className="py-8">
       <Suspense fallback={
@@ -100,7 +111,7 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
           </div>
         </div>
       }>
-        <ApplicationDetails id={params.id} />
+        <ApplicationDetails id={id} />
       </Suspense>
     </main>
   );

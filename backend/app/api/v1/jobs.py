@@ -16,20 +16,84 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 @router.post("/refresh")
 async def trigger_job_refresh(
+    db: AsyncSession = Depends(get_db),
     _: UserProfile = Depends(get_current_user),
 ) -> dict:
     """Manually trigger the background job ingestion task."""
-    task = job_ingestion.delay()
-    return {"status": "success", "task_id": task.id}
+    from app.models.entities import Task, TaskType, TaskStatus
+    
+    # Create database task record
+    task_db = Task(type=TaskType.JOB_INGESTION, status=TaskStatus.PROCESSING, result={})
+    db.add(task_db)
+    await db.commit()
+    await db.refresh(task_db)
+    
+    # Trigger Celery task with the DB task ID as the Celery task ID
+    from app.tasks.pipeline import job_ingestion_v2
+    job_ingestion_v2.apply_async(
+        kwargs={"task_id": str(task_db.id)},
+        task_id=str(task_db.id)
+    )
+    return {"status": "success", "task_id": str(task_db.id)}
 
 
 @router.get("", response_model=list[JobResponse])
 async def list_jobs(
+    recommended: bool = False,
     db: AsyncSession = Depends(get_db),
-    _: UserProfile = Depends(get_current_user),
+    current_user: UserProfile = Depends(get_current_user),
 ) -> list[JobResponse]:
-    rows = (await db.execute(select(Job).order_by(Job.created_at.desc()))).scalars().all()
-    return [JobResponse.model_validate(row) for row in rows]
+    """List jobs with an optional 'recommended' filter based on user profile."""
+    import logging
+    from datetime import datetime, timedelta, timezone
+    logger = logging.getLogger(__name__)
+    
+    one_month_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    stmt = select(Job).where(Job.created_at >= one_month_ago).order_by(Job.created_at.desc())
+    rows = (await db.execute(stmt)).scalars().all()
+    
+    candidate_jobs = rows
+    if recommended:
+        candidate_jobs = []
+        for job in rows:
+            # 1. Role Match (Strict)
+            role_match = any(role.lower() in job.title.lower() for role in current_user.desired_roles)
+            
+            # 2. Location/Domain Match (Context)
+            location_match = (current_user.location and job.location and 
+                             (current_user.location.lower() in job.location.lower() or 
+                              job.location.lower() in current_user.location.lower()))
+            
+            domain_match = any(domain.lower() in (job.raw_text_jd or "").lower() for domain in current_user.desired_domains)
+            
+            # 3. Experience Match
+            requirements = job.parsed_requirements if isinstance(job.parsed_requirements, dict) else {}
+            job_exp = requirements.get("experience_years")
+            exp_match = True
+            if job_exp is not None and current_user.experience_years is not None:
+                try:
+                    # Match if user has at least (job_required - 2) years of experience
+                    exp_match = (float(current_user.experience_years) >= float(job_exp) - 2)
+                except (ValueError, TypeError):
+                    exp_match = True # Fallback to permissive match on parse error
+            
+            # To be "Relevant", it MUST match the role and experience, and ideally the location or domain
+            if role_match and exp_match and (location_match or domain_match or not current_user.location):
+                logger.info(f"MATCH: '{job.title}' for {current_user.email} (Role: {role_match}, Exp: {exp_match})")
+                candidate_jobs.append(job)
+            else:
+                logger.debug(f"SKIP: '{job.title}' for {current_user.email}")
+            
+    results = []
+    for job in candidate_jobs:
+        insight = await match_scoring_engine.calculate(current_user, job)
+        job_res = JobResponse.model_validate(job)
+        job_res.match_score = insight["score"]
+        job_res.advisor = insight.get("advisor")
+        results.append(job_res)
+        
+    results.sort(key=lambda x: x.match_score or 0.0, reverse=True)
+    return results
 
 
 @router.get("/{job_id}", response_model=JobResponse)

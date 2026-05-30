@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     app_name: str = "ApplySense AI"
     env: str = "dev"
     api_v1_prefix: str = "/api/v1"
+    backend_cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://0.0.0.0:3000",
+    ]
 
     secret_key: str = Field(..., alias="SECRET_KEY")
     access_token_expire_minutes: int = 120
@@ -26,13 +33,19 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
 
     gemini_api_key: str | None = Field(None, alias="GEMINI_API_KEY")
+    serper_api_key: str | None = Field(None, alias="SERPER_API_KEY")
     groq_api_key: str | None = Field(None, alias="GROQ_API_KEY")
     groq_model: str = Field("llama3-8b-8192", alias="GROQ_MODEL")
     
-    primary_llm_provider: str = Field("gemini", alias="PRIMARY_LLM_PROVIDER")
+    hf_token: str | None = Field(None, alias="HF_TOKEN")
+    hf_model: str = Field("MiniMaxAI/MiniMax-M2.7:novita", alias="HF_MODEL")
+    
+    primary_llm_provider: str = Field("huggingface", alias="PRIMARY_LLM_PROVIDER")
     ollama_base_url: str = Field("https://ollama.com", alias="OLLAMA_BASE_URL")
     ollama_api_key: str | None = Field(None, alias="OLLAMA_API_KEY")
     ollama_model: str = Field("gpt-oss:20b-cloud", alias="OLLAMA_MODEL")
+    ollama_model_websearch: str = Field("gpt-oss:20b-cloud", alias="OLLAMA_MODEL_WEBSEARCH")
+    ollama_model_scraping: str = Field("gpt-oss:20b-cloud", alias="OLLAMA_MODEL_SCRAPING")
 
     latex_output_dir: str = "./generated/resumes"
     latex_template_path: str = "app/templates/resume_template.tex.j2"

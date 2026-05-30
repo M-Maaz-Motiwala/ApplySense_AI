@@ -2,13 +2,15 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models import Application, ApplicationStatus, UserProfile
-from app.schemas.api import ApplicationResponse, ApproveRejectResponse
+from app.models import Application, ApplicationStatus, UserProfile, Job
+from app.schemas.api import ApplicationResponse, ApproveRejectResponse, RegenerationRequest
+from app.tasks.pipeline import generate_application
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -18,10 +20,12 @@ async def list_applications(
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
 ) -> list[ApplicationResponse]:
+    from sqlalchemy.orm import selectinload
     rows = (
         await db.execute(
             select(Application)
             .where(Application.user_id == current_user.id)
+            .options(selectinload(Application.job))
             .order_by(Application.last_updated.desc())
         )
     ).scalars().all()
@@ -109,7 +113,14 @@ async def preview_resume(
     """Preview the generated resume LaTeX source and PDF path before approving."""
     from app.models import ResumeVersion
 
-    application = await db.get(Application, application_id)
+    from sqlalchemy.orm import selectinload
+    stmt = (
+        select(Application)
+        .where(Application.id == application_id)
+        .options(selectinload(Application.job))
+    )
+    application = (await db.execute(stmt)).scalar_one_or_none()
+    
     if not application or application.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
 
@@ -128,4 +139,130 @@ async def preview_resume(
         "email_draft": application.email_draft,
         "resume_latex_source": resume.latex_source,
         "resume_pdf_path": resume.pdf_path,
+        "advisor_feedback": application.advisor_feedback,
+        "job_title": application.job.title,
+        "company": application.job.company,
+        "job_url": application.job.source_url,
     }
+
+
+@router.get("/{application_id}/resume.pdf")
+async def get_resume_pdf(
+    application_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+):
+    """Serve the generated resume PDF file."""
+    from app.models import ResumeVersion
+    import os
+
+    application = await db.get(Application, application_id)
+    if not application or application.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    if not application.resume_version_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No resume generated yet")
+
+    resume = await db.get(ResumeVersion, application.resume_version_id)
+    if not resume or not resume.pdf_path or not os.path.exists(resume.pdf_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file not found")
+
+    return FileResponse(
+        resume.pdf_path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline"}
+    )
+
+
+@router.post("/{application_id}/regenerate")
+async def regenerate_application(
+    application_id: UUID,
+    request: RegenerationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+) -> dict:
+    """Regenerate an application with user-approved skills from the critique."""
+    application = await db.get(Application, application_id)
+    if not application or application.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    job = await db.get(Job, application.job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    # Trigger regeneration task
+    # We pass the approved skills so the AI knows it can use them
+    celery_task = generate_application.delay(
+        str(job.id), 
+        str(current_user.id), 
+        application.match_score,
+        approved_skills=request.approved_skills,
+        approved_critique=request.approved_critique
+    )
+    
+    return {"task_id": celery_task.id, "status": "processing"}
+
+@router.get("/{application_id}/interview-prep")
+async def get_interview_prep(
+    application_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+) -> dict:
+    """Generate or retrieve interview prep questions."""
+    import json
+    from app.services.llm.service import LLMService
+
+    application = await db.get(Application, application_id)
+    if not application or application.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    if application.status != ApplicationStatus.APPROVED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only approved applications can have interview prep")
+
+    # If already generated, return it
+    advisor_feedback = application.advisor_feedback or {}
+    if "interview_prep" in advisor_feedback:
+        return advisor_feedback["interview_prep"]
+
+    # Otherwise, generate it
+    job = await db.get(Job, application.job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    prompt = f"""
+    Based on the following job description, generate 5 highly relevant interview questions.
+    For each question, provide a brief tip on how to answer it effectively.
+    Return the result strictly as a JSON array of objects, where each object has 'question' and 'tip' keys.
+    Do not include markdown blocks or any other text.
+    
+    Job Description:
+    {job.raw_text_jd[:2000]}
+    """
+    
+    llm_service = LLMService()
+    result = await llm_service.generate(prompt)
+    if result["status"] == "failed":
+        raise HTTPException(status_code=500, detail="Failed to generate interview prep.")
+        
+    try:
+        import re
+        text = result["text"].strip()
+        # strip markdown if present
+        text = re.sub(r'^```json', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^```', '', text, flags=re.MULTILINE)
+        text = re.sub(r'```$', '', text)
+        questions = json.loads(text.strip())
+    except Exception as e:
+        # Fallback
+        questions = [{"question": "Tell me about your experience related to this role.", "tip": "Focus on the skills mentioned in the job description."}]
+
+    prep_data = {"questions": questions}
+    
+    # Save to db
+    import copy
+    new_feedback = copy.deepcopy(advisor_feedback)
+    new_feedback["interview_prep"] = prep_data
+    application.advisor_feedback = new_feedback
+    await db.commit()
+    
+    return prep_data

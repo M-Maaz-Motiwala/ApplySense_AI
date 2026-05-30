@@ -9,6 +9,7 @@ import { ResumeUploader } from "../../components/ui/ResumeUploader";
 import { BulletEditor } from "../../components/ui/BulletEditor";
 import { Button } from "../../components/ui/Button";
 import { DateRangePicker } from "../../components/ui/DateRangePicker";
+import { API_BASE } from "../../lib/api";
 
 // Get token helper
 function getClientToken(): string {
@@ -34,6 +35,10 @@ const defaultData = {
   name: "",
   phone: "",
   location: "",
+  experience_years: 0 as number,
+  salary_expectation: 0 as number,
+  desired_roles: [] as string[],
+  desired_domains: [] as string[],
   experience_blocks: {
     education: [{ school: "", degree: "", dates: "", location: "", CGPA: "" }],
     coursework: [],
@@ -70,7 +75,7 @@ export default function OnboardingPage() {
     setToken(t);
 
     // Fetch existing profile
-    fetch("http://localhost:8000/api/v1/auth/me", {
+    fetch(`${API_BASE}/auth/me`, {
       headers: { Authorization: `Bearer ${t}` }
     })
     .then(res => res.json())
@@ -80,6 +85,8 @@ export default function OnboardingPage() {
           name: profile.name || "",
           phone: profile.phone || "",
           location: profile.location || "",
+          desired_roles: profile.desired_roles || [],
+          desired_domains: profile.desired_domains || [],
           experience_blocks: { ...defaultData.experience_blocks, ...profile.experience_blocks },
           skills_matrix: { ...defaultData.skills_matrix, ...profile.skills_matrix }
         });
@@ -91,7 +98,7 @@ export default function OnboardingPage() {
   const saveDraft = useCallback(async (currentData: any) => {
     if (!token) return;
     try {
-      await fetch("http://localhost:8000/api/v1/auth/profile/draft", {
+      const res = await fetch(`${API_BASE}/auth/profile/draft`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -99,9 +106,14 @@ export default function OnboardingPage() {
         },
         body: JSON.stringify(currentData)
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.error("Draft save failed:", res.status, errData);
+        return;
+      }
       showToast("Saved automatically");
     } catch (e) {
-      console.error("Draft save failed");
+      console.error("Draft save network error:", e);
     }
   }, [token]);
 
@@ -157,7 +169,7 @@ export default function OnboardingPage() {
     const role = data.experience_blocks.experience[0]?.title || "Software Engineer";
     setLoadingSuggestions(true);
     try {
-      const res = await fetch("http://localhost:8000/api/v1/llm/suggest-skills", {
+      const res = await fetch(`${API_BASE}/llm/suggest-skills`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ role, category })
@@ -199,6 +211,24 @@ export default function OnboardingPage() {
             </div>
             <InputField label="LinkedIn URL" value={data.experience_blocks.linkedin} onChange={(e) => updateBlock("experience_blocks", "linkedin", e.target.value)} />
             <InputField label="GitHub URL" value={data.experience_blocks.github} onChange={(e) => updateBlock("experience_blocks", "github", e.target.value)} />
+            
+            <div className="pt-4 border-t border-slate-100">
+              <TagInput 
+                label="Target Job Roles" 
+                tags={data.desired_roles} 
+                onChange={(tags) => updateField("desired_roles", tags)} 
+                placeholder="e.g. Software Engineer, Data Scientist"
+              />
+              <TagInput 
+                label="Target Industries / Domains" 
+                tags={data.desired_domains} 
+                onChange={(tags) => updateField("desired_domains", tags)} 
+                placeholder="e.g. Fintech, AI, E-commerce"
+              />
+              {data.desired_domains.length === 0 && (
+                <p className="text-xs text-amber-600 font-medium">Domain is a mandatory field for profile matching.</p>
+              )}
+            </div>
           </div>
         );
       case 2:
@@ -207,7 +237,39 @@ export default function OnboardingPage() {
             <ResumeUploader 
               token={token} 
               onSuccess={(parsed) => {
-                setData(prev => ({ ...prev, ...parsed }));
+                setData(prev => {
+                  const newState = { ...prev, ...parsed };
+                  
+                  // Deep merge experience_blocks
+                  if (parsed.experience_blocks) {
+                    newState.experience_blocks = {
+                      ...prev.experience_blocks,
+                      ...parsed.experience_blocks
+                    };
+                    
+                    // If the AI returned empty arrays for sections that should at least have one empty entry (for UI), 
+                    // or if it omitted them entirely, we handle that here.
+                    // But usually, the UI is fine with empty arrays if the user hasn't added anything.
+                    // The user specifically asked to "leave them" if no match, so we ensure we don't overwrite with nulls.
+                    for (const key in parsed.experience_blocks) {
+                      if (!parsed.experience_blocks[key] || (Array.isArray(parsed.experience_blocks[key]) && parsed.experience_blocks[key].length === 0)) {
+                        // If AI returned empty, we might want to keep what was there if it was meaningful.
+                        // However, for a fresh parse, usually we want exactly what the AI found.
+                        // For now, the spread ...prev.experience_blocks already handles missing keys.
+                      }
+                    }
+                  }
+
+                  // Deep merge skills_matrix
+                  if (parsed.skills_matrix) {
+                    newState.skills_matrix = {
+                      ...prev.skills_matrix,
+                      ...parsed.skills_matrix
+                    };
+                  }
+
+                  return newState;
+                });
                 showToast("Resume parsed successfully!");
                 setCurrentStep(3);
               }} 

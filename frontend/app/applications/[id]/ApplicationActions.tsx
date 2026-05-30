@@ -49,9 +49,19 @@ export default function ApplicationActions({ applicationId, initialStatus, token
           {status === "APPROVED" ? "✅" : "❌"}
         </div>
         <h3 className="font-bold text-slate-900 mb-1">Review Complete</h3>
-        <p className="text-slate-500 text-sm">
+        <p className="text-slate-500 text-sm mb-4">
           This application was <span className="font-bold text-slate-700">{status}</span>.
         </p>
+        
+        {status === "APPROVED" && (
+          <Button 
+            variant="primary" 
+            onClick={() => router.push(`/applications/${applicationId}/interview-prep`)}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 shadow-[0_0_15px_rgba(79,70,229,0.3)] border-0"
+          >
+            🎯 Prepare for Interview
+          </Button>
+        )}
       </div>
     );
   }

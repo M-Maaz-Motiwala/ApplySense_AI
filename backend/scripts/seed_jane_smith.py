@@ -21,100 +21,61 @@ with SyncSessionLocal() as db:
     experience_blocks = {
         "education": [
             {
-                "school": "Tech Institute of AI",
-                "dates": "Sep. 2015 -- May 2019",
-                "degree": "Master of Science in Machine Learning",
-                "location": "Seattle, WA"
+                "school": "Stanford University",
+                "dates": "2014 -- 2016",
+                "degree": "Master of Science in Artificial Intelligence",
+                "location": "Stanford, CA"
             }
-        ],
-        "coursework": [
-            "Deep Learning",
-            "Natural Language Processing",
-            "Distributed Systems",
-            "Advanced User Interfaces",
-            "Mobile App Architecture"
         ],
         "experience": [
             {
-                "company": "NextGen AI Corp",
-                "dates": "Jan 2021 -- Present",
-                "title": "Machine Learning Engineer",
-                "location": "San Francisco, CA",
-                "bullets": [
-                    "Designed and trained large-scale transformer models using PyTorch for natural language generation tasks.",
-                    "Implemented distributed training pipelines across multi-GPU clusters, reducing training time by 40%.",
-                    "Deployed ML models to production using Docker and Kubernetes, ensuring high availability and low latency."
-                ]
-            },
-            {
-                "company": "Creative Web Solutions",
-                "dates": "Jun 2019 -- Dec 2020",
-                "title": "Jun 2019 -- Dec 2020",
-                "location": "Austin, TX",
-                "bullets": [
-                    "Built responsive, dynamic web applications using React and TypeScript for various e-commerce clients.",
-                    "Collaborated with UX designers to implement accessible components and optimize website loading speeds.",
-                    "Managed application state using Redux and interacted with RESTful backend services."
-                ]
-            },
-            {
-                "company": "Appify Mobile Startup",
-                "dates": "May 2018 -- Aug 2018",
-                "title": "iOS Developer Intern",
-                "location": "Remote",
-                "bullets": [
-                    "Developed a native iOS application using Swift and UIKit for tracking daily fitness activities.",
-                    "Integrated CoreLocation and HealthKit frameworks to provide accurate tracking data.",
-                    "Published the application to the Apple App Store, achieving over 10,000 downloads in the first month."
-                ]
-            },
-            {
-                "company": "University AI Research Lab",
-                "dates": "Jan 2018 -- May 2019",
-                "title": "Undergraduate Research Assistant",
+                "company": "Tech Giants Corp (Cloud AI)",
+                "role": "Tech Lead / Senior ML Engineer",
+                "dates": "Jan. 2020 -- Present",
                 "location": "Seattle, WA",
                 "bullets": [
-                    "Conducted extensive research on transformer architectures for NLP applications under Dr. Alan Turing.",
-                    "Co-authored a paper on distributed training optimizations for large language models, published at NeurIPS.",
-                    "Implemented experimental PyTorch pipelines that achieved a 15% reduction in memory overhead during training."
+                    "Led a team of 10 engineers in developing and deploying large-scale LLM architectures, reducing inference latency by 45%.",
+                    "Architected the company's core AI infrastructure using Kubernetes and Ray, supporting 100M+ daily requests.",
+                    "Designed advanced RAG systems for healthcare data processing, ensuring HIPAA compliance and 98% retrieval accuracy."
+                ]
+            },
+            {
+                "company": "AI Innovation Labs",
+                "role": "Machine Learning Engineer",
+                "dates": "Jun. 2016 -- Dec. 2019",
+                "location": "San Francisco, CA",
+                "bullets": [
+                    "Developed computer vision models for medical imaging, improving early cancer detection rates by 20%.",
+                    "Optimized distributed training pipelines for deep neural networks using PyTorch and Horovod."
                 ]
             }
         ],
         "projects": [
             {
-                "name": "Custom Language Model",
-                "tech": "PyTorch, HuggingFace, Transformers",
-                "date": "March 2023",
+                "name": "OpenSourceGPT Contributor",
+                "dates": "2022 -- Present",
                 "bullets": [
-                    "Fine-tuned a pre-trained transformer model on a specialized domain dataset to improve text summarization.",
-                    "Evaluated model performance using BLEU and ROUGE scores, outperforming baseline models."
-                ]
-            },
-            {
-                "name": "E-Commerce Dashboard",
-                "tech": "React, TailwindCSS, TypeScript",
-                "date": "July 2020",
-                "bullets": [
-                    "Created an interactive dashboard for vendors to visualize sales metrics and customer demographics.",
-                    "Implemented complex data visualizations using D3.js and Recharts."
+                    "Contributor to core optimization layers in open-source LLM frameworks.",
+                    "Published 3 peer-reviewed papers on efficient fine-tuning techniques."
                 ]
             }
-        ],
-        "linkedin": "https://linkedin.com/in/janesmith",
-        "github": "https://github.com/janesmith"
+        ]
     }
 
     skills_matrix = {
-        "languages": ["Python", "TypeScript", "JavaScript", "Swift", "C++"],
-        "tools": ["Git", "Docker", "Kubernetes", "Jupyter", "AWS"],
-        "frameworks": ["PyTorch", "React", "Transformers", "Node.js"]
+        "languages": ["Python", "C++", "CUDA", "SQL"],
+        "tools": ["AWS", "GCP", "Kubernetes", "Ray", "Docker", "Git"],
+        "frameworks": ["PyTorch", "TensorFlow", "Transformers", "LangChain", "HuggingFace"]
     }
 
     user.experience_blocks = experience_blocks
     user.skills_matrix = skills_matrix
-    user.phone = encrypt_value("987-654-3210")
+    user.phone = encrypt_value("206-555-0199")
     user.name = "Jane Smith"
     user.location = "Seattle, WA"
+    user.experience_years = 8.0
+    user.desired_roles = ["Senior Machine Learning Engineer", "AI Architect", "ML Team Lead"]
+    user.desired_domains = ["Healthcare", "Artificial Intelligence", "Cloud"]
 
     db.commit()
     print("User Jane Smith seeded successfully.")

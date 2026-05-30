@@ -17,18 +17,38 @@ function formatMonthYear(yyyymm: string) {
   return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
+// Helper to parse "MMM YYYY" to YYYY-MM
+function parseMonthYear(str: string) {
+  if (!str || str.toLowerCase() === "present") return "";
+  const date = new Date(str);
+  if (isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
 export function DateRangePicker({ label, value, onChange, single = false }: DateRangePickerProps) {
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
 
   // Attempt to parse existing "MMM YYYY -- MMM YYYY" on mount
   useEffect(() => {
-    if (value && value.includes(" -- ")) {
-      // Basic reverse parsing isn't perfect for all formats, 
-      // but we will mainly rely on this component generating the string.
-      // For simplicity, we just sync the outgoing string when inputs change.
+    if (!value) return;
+    
+    if (single) {
+      setStart(parseMonthYear(value));
+      return;
     }
-  }, [value]);
+
+    if (value.includes(" -- ")) {
+      const [s, e] = value.split(" -- ");
+      setStart(parseMonthYear(s));
+      setEnd(parseMonthYear(e));
+    } else {
+      // Fallback for single date in a range field
+      setStart(parseMonthYear(value));
+    }
+  }, [value, single]);
 
   const handleStart = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newStart = e.target.value;
